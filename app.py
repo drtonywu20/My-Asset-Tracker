@@ -72,56 +72,33 @@ def format_currency_foreign(val, currency):
 
 # ----------------- Core Data Fetching -----------------
 
-@st.cache_data(ttl=300) # 5分鐘快取，防限流
+@st.cache_data(ttl=300)
 def fetch_realtime_market_data(assets_list):
-    """採用完全獨立的 Ticker 查詢法，徹底避免跨市場時區崩潰"""
+    """最純粹的獨立抓取法：不計算時區、不刪除行數，直接拿 yfinance 過濾好雜訊的最新日K線"""
     quote_data = {}
     exchange_rate = 32.5
     
     # 1. 抓取匯率
     try:
-        fx_hist = yf.Ticker("USDTWD=X").history(period="3d")
+        fx_hist = yf.Ticker("USDTWD=X").history(period="5d", interval="1d")
         if not fx_hist.empty:
             exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
     except: pass
 
-    now_utc = datetime.utcnow()
-    
     # 2. 獨立抓取每個資產
     for asset in assets_list:
         if asset["category"] == "cash": continue
         sym = asset["symbol"]
-        cat = asset["category"]
         if sym in quote_data: continue
             
         try:
-            # 獨立獲取歷史紀錄
-            hist = yf.Ticker(sym).history(period="5d")
-            if hist.empty: continue
+            # 直接索取最近 5 天的常規日 K 線
+            hist = yf.Ticker(sym).history(period="5d", interval="1d")
             hist = hist.dropna(subset=['Close'])
+            
             if hist.empty: continue
             
-            # ✨ 計算當地市場時間與開盤狀態
-            if cat == "us_stock":
-                now_local = now_utc - timedelta(hours=4) # EDT 美東
-                is_open = now_local.weekday() < 5 and (9.5 <= now_local.hour + now_local.minute/60.0 < 16.0)
-            elif cat == "tw_stock":
-                now_local = now_utc + timedelta(hours=8) # CST 台北
-                is_open = now_local.weekday() < 5 and (9.0 <= now_local.hour + now_local.minute/60.0 < 13.5)
-            else:
-                is_open = True
-                now_local = now_utc
-                
-            # ✨ 核心防呆：判斷是否需要剔除盤後的假數據
-            target_today = now_local.date()
-            last_date = hist.index[-1].date()
-            
-            # 如果市場沒開，但卻有今天的數據，代表這是盤前或盤後的浮動值，強制捨棄！
-            if not is_open and last_date == target_today:
-                hist = hist.iloc[:-1]
-                
-            if hist.empty: continue
-            
+            # 大道至簡：最後一筆就是最新的（開盤=即時價，休盤=正式收盤價）
             price = hist['Close'].iloc[-1]
             prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else price
             
@@ -176,12 +153,10 @@ def fetch_historical_performance(assets_list, period="1mo"):
     
     chart_data_frames = []
     
-    # 獨立抓取並將時區「拔除」，變成純粹的日期
     for sym in symbols_to_fetch:
         try:
             h = yf.Ticker(sym).history(period=yf_period, interval=yf_interval)
             if h.empty: continue
-            # 拔除時區標籤，對齊到純淨的日期格式
             h.index = pd.to_datetime(h.index, utc=True).tz_convert(None).normalize()
             h = h[['Close']].rename(columns={'Close': sym})
             h = h[~h.index.duplicated(keep='last')]
@@ -190,7 +165,6 @@ def fetch_historical_performance(assets_list, period="1mo"):
         
     if not chart_data_frames: return []
     
-    # 安全合併所有乾淨的資料表，並填補假日的空值
     hist_df = pd.concat(chart_data_frames, axis=1)
     hist_df = hist_df.ffill().bfill()
     
@@ -401,3 +375,9 @@ if selected_id:
                     st.rerun()
 
 st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>"
+    f"Tony's Asset Dashboard • Live Sync via Yahoo Finance • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    "</div>", 
+    unsafe_allow_html=True
+)
