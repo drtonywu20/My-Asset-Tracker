@@ -483,7 +483,6 @@ with col_left:
             mode="lines",
             fill="tozeroy",
             line_color=color_map.get(selected_class, "#6366f1"),
-            fillcolor=f"{color_map.get(selected_class, '#6366f1')}1F", # semi-transparent
             name=selected_class,
             hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
         ))
