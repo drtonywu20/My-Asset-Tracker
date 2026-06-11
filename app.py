@@ -113,7 +113,7 @@ def format_currency_twd(val):
 
 def format_currency_foreign(val, currency):
     if currency == "TWD":
-        return f"NT$ {val:,.2f}"  # 保持台股顯示兩位小數
+        return f"NT$ {val:,.2f}"
     elif currency == "USD":
         return f"${val:,.2f}"
     return f"{currency} {val:,.4f}"
@@ -121,48 +121,83 @@ def format_currency_foreign(val, currency):
 # 5-minute cache to keep API requests optimal, with key for resetting
 @st.cache_data(ttl=300)
 def fetch_realtime_market_data(assets_list):
-    """Fetches quotes and USDTWD rate from Yahoo Finance individually to prevent calendar mixing issues."""
+    """Fetches quotes and USDTWD rate via batch download with absolute timezone boundaries."""
     quote_data = {}
     exchange_rate = 32.5
     
-    # 1. 獨立獲取最新的美元/台幣匯率
+    symbols = [a["symbol"] for a in assets_list if a["category"] != "cash"]
+    symbols_to_fetch = list(set(symbols + ["USDTWD=X"]))
+    
+    # 精確判定當前跨國市場是否處於正規交易時間
+    now_utc = datetime.utcnow()
+    
+    # 判斷美股開盤狀態 (美東時間 EDT = UTC - 4)
+    now_edt = now_utc - timedelta(hours=4)
+    us_is_weekday = now_edt.weekday() < 5
+    us_market_open = us_is_weekday and (now_edt.replace(hour=9, minute=30, second=0, microsecond=0) <= now_edt <= now_edt.replace(hour=16, minute=0, second=0, microsecond=0))
+    
+    # 判斷台股開盤狀態 (台北時間 CST = UTC + 8)
+    now_twn = now_utc + timedelta(hours=8)
+    tw_is_weekday = now_twn.weekday() < 5
+    tw_market_open = tw_is_weekday and (now_twn.replace(hour=9, minute=0, second=0, microsecond=0) <= now_twn <= now_twn.replace(hour=13, minute=30, second=0, microsecond=0))
+    
     try:
-        fx_ticker = yf.Ticker("USDTWD=X")
-        fx_hist = fx_ticker.history(period="3d")
-        if not fx_hist.empty:
-            exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
-    except Exception:
-        pass
+        # 使用批量下載，一趟請求解決所有標的，免除 Rate Limit 限流阻擋
+        hist_data = yf.download(symbols_to_fetch, period="5d", interval="1d", group_by='ticker', progress=False)
         
-    # 2. 獨立獲取每個標的的最新市價與昨日收盤價（完美支持開盤實時與休盤防呆）
-    for asset in assets_list:
-        if asset["category"] == "cash":
-            continue
-        sym = asset["symbol"]
-        if sym in quote_data:
-            continue
+        # 優先提取即時匯率
+        if "USDTWD=X" in symbols_to_fetch:
+            df_fx = hist_data if len(symbols_to_fetch) == 1 else hist_data["USDTWD=X"]
+            df_fx = df_fx.dropna(subset=['Close'])
+            if not df_fx.empty:
+                exchange_rate = float(df_fx['Close'].iloc[-1])
+        
+        for asset in assets_list:
+            if asset["category"] == "cash":
+                continue
+            sym = asset["symbol"]
+            cat = asset["category"]
             
-        try:
-            t = yf.Ticker(sym)
-            # 抓取 3 天常規歷史 K 線（開盤時最後一列會自動變成實時動態 Tick，未開盤則為最新收盤價）
-            df_sym = t.history(period="3d")
+            if sym in quote_data:
+                continue
+                
+            df_sym = hist_data if len(symbols_to_fetch) == 1 else hist_data[sym]
             df_sym = df_sym.dropna(subset=['Close'])
             
             if not df_sym.empty:
-                price = df_sym['Close'].iloc[-1] # 開盤為即時價 / 休盤為最新收盤價
-                prev_close = df_sym['Close'].iloc[-2] if len(df_sym) > 1 else price # 前一交易日收盤價
+                last_row_date = df_sym.index[-1].date()
                 
+                # 綁定各市場專屬時間邊界
+                if cat == "us_stock":
+                    target_today = now_edt.date()
+                    is_open = us_market_open
+                elif cat == "tw_stock":
+                    target_today = now_twn.date()
+                    is_open = tw_market_open
+                else:
+                    target_today = None
+                    is_open = True # 加密貨幣全年無休，直接抓最新
+                    
+                # ✨ 時區感應防呆核心：若是股休期間，Yahoo 卻塞了今天的尚未成型數據列，主動向後倒退一格取真正的收盤價
+                if cat in ["us_stock", "tw_stock"] and (last_row_date == target_today) and not is_open:
+                    price = df_sym['Close'].iloc[-2] if len(df_sym) > 1 else df_sym['Close'].iloc[-1]
+                    prev_close = df_sym['Close'].iloc[-3] if len(df_sym) > 2 else price
+                else:
+                    # 市場正開盤中，或今日新數據列尚未生成，直接取最新一列
+                    price = df_sym['Close'].iloc[-1]
+                    prev_close = df_sym['Close'].iloc[-2] if len(df_sym) > 1 else price
+                    
                 quote_data[sym] = {
                     "price": float(price),
                     "prev_close": float(prev_close)
                 }
-        except Exception:
-            pass
+    except Exception as e:
+        st.warning(f"Batch synchronization failed, returning baseline data: {str(e)}")
         
     portfolio_assets = []
     
     for asset in assets_list:
-        asset_id = asset.get("id", asset["symbol"]) # backward compatible
+        asset_id = asset.get("id", asset["symbol"])
         if asset["category"] == "cash":
             portfolio_assets.append({
                 "id": asset_id,
@@ -184,7 +219,6 @@ def fetch_realtime_market_data(assets_list):
         current_price = quote["price"]
         prev_close = quote["prev_close"]
         
-        # Calculate day change %
         if prev_close > 0:
             day_change_percent = ((current_price - prev_close) / prev_close) * 100
         else:
@@ -225,7 +259,6 @@ def fetch_historical_performance(assets_list, period="1mo"):
         
     symbols_to_fetch = list(set(symbols + ["USDTWD=X"]))
     
-    # Map period string to yfinance periods
     period_mapping = {
         "1w": ("7d", "1d"),
         "1mo": ("1mo", "1d"),
@@ -237,27 +270,20 @@ def fetch_historical_performance(assets_list, period="1mo"):
     yf_period, yf_interval = period_mapping.get(period, ("1mo", "1d"))
     
     try:
-        # Download historical data
         hist_df = yf.download(symbols_to_fetch, period=yf_period, interval=yf_interval, group_by='ticker', progress=False)
         if hist_df.empty:
             return []
             
-        # 徹底移除跨市場重複日期索引
         hist_df = hist_df[~hist_df.index.duplicated(keep='last')]
-        # 進行雙向數值填補，完美銜接各市場休假空窗
         hist_df = hist_df.ffill().bfill()
             
-        # Get list of index dates
         dates = hist_df.index
-        
-        # Create a parsed historical record
         chart_data = []
         
         cash_asset = next((a for a in assets_list if a["category"] == "cash"), None)
         cash_value = cash_asset["quantity"] if cash_asset else 0.0
         
         for date in dates:
-            # Safely grab fx_rate
             fx_rate = 32.5
             try:
                 if len(symbols_to_fetch) == 1 and "USDTWD=X" in symbols_to_fetch:
@@ -282,7 +308,6 @@ def fetch_historical_performance(assets_list, period="1mo"):
                 sym = asset["symbol"]
                 quantity = asset["quantity"]
                 
-                # Fetch closing price
                 price = None
                 try:
                     if len(symbols_to_fetch) == 1:
@@ -328,19 +353,15 @@ def fetch_historical_performance(assets_list, period="1mo"):
 
 # ----------------- Main Controller -----------------
 
-# Load current assets list from session / storage
 if "assets" not in st.session_state:
     st.session_state.assets = load_assets()
 
-# Sidebar Setup
 with st.sidebar:
     st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=100&q=80", width=60)
     st.markdown("<h2 style='margin-top:0;'>Tony's Control Panel</h2>", unsafe_allow_html=True)
     st.write("Manage your customized financial holdings here.")
 
-    # Top level global actions
     st.subheader("Global Commands")
-    
     col_ref, col_res = st.columns(2)
     with col_ref:
         if st.button("🔄 Refresh Rates", use_container_width=True):
@@ -358,7 +379,6 @@ with st.sidebar:
 
     st.markdown("---")
     
-    # Add Asset Section
     st.subheader("➕ Add New Asset")
     with st.form("add_asset_form", clear_on_submit=True):
         new_name = st.text_input("Asset Name", placeholder="e.g. Taiwan Semiconductor")
@@ -389,15 +409,13 @@ with st.sidebar:
                 st.success(f"Added {new_name} ({clean_sym})!")
                 st.rerun()
 
-# Welcome Header & Title
 st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
 st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
 
-# Fetch calculated valuations
 with st.spinner("Fetching active markets and calculating TWD values..."):
     exchange_rate, portfolio = fetch_realtime_market_data(st.session_state.assets)
 
-# ----------------- Dashboard Valuations / Summary Calculations -----------------
+# ----------------- Summary Calculations -----------------
 
 total_net_worth = sum(a["totalValueTWD"] for a in portfolio)
 total_day_change = sum(a["dayChangeTWD"] for a in portfolio)
@@ -408,7 +426,6 @@ cash_asset = next((a for a in portfolio if a["category"] == "cash"), None)
 cash_total = cash_asset["totalValueTWD"] if cash_asset else 0.0
 cash_ratio = (cash_total / total_net_worth * 100) if total_net_worth > 0 else 0.0
 
-# Render top-level net stats
 m1, m2, m3 = st.columns([2, 1, 1])
 
 with m1:
@@ -435,14 +452,13 @@ with m3:
         delta="Live Yahoo Query"
     )
 
-# ----------------- Layout Main Sections -----------------
+# ----------------- Charts Layout -----------------
 
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
     st.subheader("📈 Performance History")
     
-    # Performance Chart selectors
     chart_p1, chart_p2 = st.columns([2, 3])
     with chart_p1:
         selected_period = st.segmented_control(
@@ -471,8 +487,6 @@ with col_left:
     
     if hist_data:
         df_hist = pd.DataFrame(hist_data)
-        
-        # Plotly Area Chart
         fig_area = go.Figure()
         
         color_map = {
@@ -517,7 +531,6 @@ with col_left:
 with col_right:
     st.subheader("🍩 Current Asset Allocation")
     
-    # Calculate categories allocations
     alloc_totals = {}
     for a in portfolio:
         cat = a["category"]
@@ -552,11 +565,10 @@ with col_right:
     else:
         st.info("No asset holdings to calculate allocations.")
 
-# ----------------- Grouped Asset Table & Adjustments -----------------
+# ----------------- Grouped Asset Table -----------------
 st.markdown("---")
 st.subheader("📋 Your Asset Ledger")
 
-# Group assets by Category to show custom tables
 for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     cat_assets = [a for a in portfolio if a["category"] == cat_key]
     if not cat_assets:
@@ -567,7 +579,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
     cat_total_change = sum(a["dayChangeTWD"] for a in cat_assets)
     
-    # Category Header Metrics
     ch_1, ch_2 = st.columns([3, 1])
     with ch_1:
          st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
@@ -580,7 +591,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
              unsafe_allow_html=True
          )
          
-    # Build data list for render
     tbl_data = []
     for asset in cat_assets:
         is_pos = asset["dayChangePercent"] >= 0
@@ -609,21 +619,18 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         })
         
     df_render = pd.DataFrame(tbl_data)
-    
-    # Display elegant HTML tables
     st.write(
         df_render[["Asset", "Holdings", "Price", "Day Change", "Total Value"]].to_html(
             escape=False, index=False, justify="left", classes="stTable"
         ), 
         unsafe_allow_html=True
     )
-    st.write("") # spacing
+    st.write("")
 
-# ----------------- Manage Holdings (Edit Quantity & Buy/Sell Adjust) -----------------
+# ----------------- Manage Holdings -----------------
 st.markdown("---")
 st.subheader("⚙️ Manage & Adjust Asset Quantity (買賣與數量修改)")
 
-# Select which asset to modify
 asset_options = {a["id"]: f"{CATEGORY_LABELS[a['category']]} - {a['symbol']} ({a['name']})" for a in portfolio}
 selected_id = st.selectbox("Select Asset to Adjust", options=list(asset_options.keys()), format_func=lambda x: asset_options[x])
 
@@ -643,12 +650,10 @@ if selected_id:
             
             if "No" not in trade_type:
                 trade_volume = st.number_input("Transaction Quantity", min_value=0.0, step=1.0, value=0.0, format="%.5f")
-                
                 if "Buy" in trade_type:
                     projected_quantity = current_qty + trade_volume
                 else:
                     projected_quantity = max(0.0, current_qty - trade_volume)
-                    
                 st.write(f"Projected holdings: `{current_qty:,.5f}` ➔ **`{projected_quantity:,.5f}`**")
             else:
                 edit_qty = st.number_input("Modify Total Holdings Directly", min_value=0.0, value=current_qty, format="%.5f")
@@ -658,8 +663,39 @@ if selected_id:
             st.markdown("**Metadata Settings**")
             edit_name = st.text_input("Asset Name", value=tgt["name"])
             
-            # Action Buttons
             act_col1, act_col2 = st.columns(2)
             with act_col1:
                 if st.button("💾 Save Action", use_container_width=True):
-                    all_assets = load
+                    all_assets = load_assets()
+                    for idx, a in enumerate(all_assets):
+                        if (a.get("id") == tgt["id"]) or (a["symbol"] == tgt["symbol"] and a.get("id") is None):
+                            all_assets[idx]["quantity"] = float(projected_quantity)
+                            all_assets[idx]["name"] = edit_name
+                            break
+                            
+                    st.session_state.assets = all_assets
+                    save_assets(all_assets)
+                    st.cache_data.clear()
+                    st.toast("Holding quantities successfully updated!", icon="💾")
+                    st.rerun()
+                    
+            with act_col2:
+                if tgt["category"] == "cash":
+                    st.write("(Cash cannot be removed)")
+                elif st.button("🗑️ Remove Asset", use_container_width=True, type="primary"):
+                    all_assets = load_assets()
+                    filtered = [a for a in all_assets if not (a.get("id") == tgt["id"] or (a["symbol"] == tgt["symbol"] and a.get("id") is None))]
+                    st.session_state.assets = filtered
+                    save_assets(filtered)
+                    st.cache_data.clear()
+                    st.toast(f"Removed {tgt['name']} from asset list", icon="🗑️")
+                    st.rerun()
+
+# Footer StatusBar
+st.markdown("---")
+st.markdown(
+    "<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>"
+    f"Tony's Asset Dashboard • Live Sync via Yahoo Finance • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    "</div>", 
+    unsafe_allow_html=True
+)
