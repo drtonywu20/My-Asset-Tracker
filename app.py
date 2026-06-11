@@ -401,4 +401,3 @@ if selected_id:
                     st.rerun()
 
 st.markdown("---")
-st.markdown(f"<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>Tony's Asset Dashboard • Live Sync via Yahoo Finance • Last update: {datetime.now().strftime('%Y-%m-%d %
