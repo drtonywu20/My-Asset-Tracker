@@ -251,6 +251,12 @@ def fetch_historical_performance(assets_list, period="1mo"):
         if hist_df.empty:
             return []
             
+        # ✨ 超級關鍵修復 1：刪除重複的日期索引（徹底解決跨市場時區重疊造成的重複列魔王）
+        hist_df = hist_df[~hist_df.index.duplicated(keep='last')]
+            
+        # ✨ 超級關鍵修復 2：雙向填補空值（先向前填補假日，再向後填補開頭空缺），確保天天有數字
+        hist_df = hist_df.ffill().bfill()
+            
         # Get list of index dates
         dates = hist_df.index
         
