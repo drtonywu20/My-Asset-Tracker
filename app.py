@@ -358,7 +358,7 @@ with st.sidebar:
         new_cat = st.selectbox("Category", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
         new_qty = st.number_input("Holding Quantity", min_value=0.0, step=0.1, value=0.0, format="%.5f")
         
-        submitted = st.form_submit_with_value("Add to Portfolio")
+        submitted = st.form_submit_button("Add to Portfolio")
         if submitted:
             if not new_name or not new_sym:
                 st.error("Please provide both a Display Name and Symbol.")
