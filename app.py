@@ -113,7 +113,7 @@ def format_currency_twd(val):
 
 def format_currency_foreign(val, currency):
     if currency == "TWD":
-        return format_currency_twd(val)
+        return f"NT$ {val:,.2f}"  # ✨ 修改這裡：讓台股市價顯示完整小數點後兩位
     elif currency == "USD":
         return f"${val:,.2f}"
     return f"{currency} {val:,.4f}"
@@ -130,40 +130,31 @@ def fetch_realtime_market_data(assets_list):
     exchange_rate = 32.5
     
     try:
-        tickers = yf.Tickers(" ".join(symbols_to_fetch))
+        # ✨ 終極批量優化：一口氣下載 2 天的歷史常規交易數據（不包含盤後延長交易）
+        hist_data_2d = yf.download(symbols_to_fetch, period="2d", interval="1d", group_by='ticker', progress=False)
+        
         for sym in symbols_to_fetch:
             try:
-                # Use fast_info or info or history for robustness
-                t = tickers.tickers[sym]
-                # Try getting regular Market Price
-                price = t.fast_info.get('last_price', None)
-                prev_close = t.fast_info.get('previous_close', None)
+                # 針對單個標的提取歷史 K 線 DataFrame
+                if len(symbols_to_fetch) == 1:
+                    df_sym = hist_data_2d
+                else:
+                    df_sym = hist_data_2d[sym]
                 
-                # 排除 yfinance 傳回的異常 nan 空值
-                if pd.isna(price): price = None
-                if pd.isna(prev_close): prev_close = None
-                
-                # Fetch basic info fallback (拉長到 5 天，確保能跨越長週末找上一個交易日)
-                if price is None:
-                    h = t.history(period="5d")
-                    if not h.empty:
-                        valid_closes = h['Close'].dropna() # 過濾掉空值
-                        if not valid_closes.empty:
-                            price = valid_closes.iloc[-1]
-                            prev_close = valid_closes.iloc[-2] if len(valid_closes) > 1 else price
-                
-                # 確認安全後再儲存
-                if price is not None and not pd.isna(price):
+                # 剔除空行，確保拿到的都是開盤日的真實常規收盤價
+                df_sym = df_sym.dropna(subset=['Close'])
+                if not df_sym.empty:
+                    price = df_sym['Close'].iloc[-1]  # 最新一個常規交易日的收盤價
+                    prev_close = df_sym['Close'].iloc[-2] if len(df_sym) > 1 else price # 前一個交易日的收盤價
+                    
                     quote_data[sym] = {
                         "price": float(price),
-                        "prev_close": float(prev_close) if prev_close is not None and not pd.isna(prev_close) else float(price)
+                        "prev_close": float(prev_close)
                     }
-            except Exception as e:
-                # Fallback standard
+            except Exception:
                 pass
     except Exception as general_err:
         st.warning(f"Unable to load full realtime quotes. Using simulated fallback exchange rates.")
-        
     # Extracted Exchange Rate
     if "USDTWD=X" in quote_data:
         exchange_rate = quote_data["USDTWD=X"]["price"]
