@@ -113,7 +113,7 @@ def format_currency_twd(val):
 
 def format_currency_foreign(val, currency):
     if currency == "TWD":
-        return f"NT$ {val:,.2f}"  # ✨ 修改這裡：讓台股市價顯示完整小數點後兩位
+        return f"NT$ {val:,.2f}"  # 保持台股顯示兩位小數
     elif currency == "USD":
         return f"${val:,.2f}"
     return f"{currency} {val:,.4f}"
@@ -121,43 +121,43 @@ def format_currency_foreign(val, currency):
 # 5-minute cache to keep API requests optimal, with key for resetting
 @st.cache_data(ttl=300)
 def fetch_realtime_market_data(assets_list):
-    """Fetches quotes and USDTWD rate from Yahoo Finance."""
-    symbols = [a["symbol"] for a in assets_list if a["category"] != "cash"]
-    # We append the exchange rate ticket
-    symbols_to_fetch = list(set(symbols + ["USDTWD=X"]))
-    
+    """Fetches quotes and USDTWD rate from Yahoo Finance individually to prevent calendar mixing issues."""
     quote_data = {}
     exchange_rate = 32.5
     
+    # 1. 獨立獲取最新的美元/台幣匯率
     try:
-        # ✨ 終極批量優化：一口氣下載 2 天的歷史常規交易數據（不包含盤後延長交易）
-        hist_data_2d = yf.download(symbols_to_fetch, period="2d", interval="1d", group_by='ticker', progress=False)
+        fx_ticker = yf.Ticker("USDTWD=X")
+        fx_hist = fx_ticker.history(period="3d")
+        if not fx_hist.empty:
+            exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
+    except Exception:
+        pass
         
-        for sym in symbols_to_fetch:
-            try:
-                # 針對單個標的提取歷史 K 線 DataFrame
-                if len(symbols_to_fetch) == 1:
-                    df_sym = hist_data_2d
-                else:
-                    df_sym = hist_data_2d[sym]
+    # 2. 獨立獲取每個標的的最新市價與昨日收盤價（完美支持開盤實時與休盤防呆）
+    for asset in assets_list:
+        if asset["category"] == "cash":
+            continue
+        sym = asset["symbol"]
+        if sym in quote_data:
+            continue
+            
+        try:
+            t = yf.Ticker(sym)
+            # 抓取 3 天常規歷史 K 線（開盤時最後一列會自動變成實時動態 Tick，未開盤則為最新收盤價）
+            df_sym = t.history(period="3d")
+            df_sym = df_sym.dropna(subset=['Close'])
+            
+            if not df_sym.empty:
+                price = df_sym['Close'].iloc[-1] # 開盤為即時價 / 休盤為最新收盤價
+                prev_close = df_sym['Close'].iloc[-2] if len(df_sym) > 1 else price # 前一交易日收盤價
                 
-                # 剔除空行，確保拿到的都是開盤日的真實常規收盤價
-                df_sym = df_sym.dropna(subset=['Close'])
-                if not df_sym.empty:
-                    price = df_sym['Close'].iloc[-1]  # 最新一個常規交易日的收盤價
-                    prev_close = df_sym['Close'].iloc[-2] if len(df_sym) > 1 else price # 前一個交易日的收盤價
-                    
-                    quote_data[sym] = {
-                        "price": float(price),
-                        "prev_close": float(prev_close)
-                    }
-            except Exception:
-                pass
-    except Exception as general_err:
-        st.warning(f"Unable to load full realtime quotes. Using simulated fallback exchange rates.")
-    # Extracted Exchange Rate
-    if "USDTWD=X" in quote_data:
-        exchange_rate = quote_data["USDTWD=X"]["price"]
+                quote_data[sym] = {
+                    "price": float(price),
+                    "prev_close": float(prev_close)
+                }
+        except Exception:
+            pass
         
     portfolio_assets = []
     
@@ -238,14 +238,13 @@ def fetch_historical_performance(assets_list, period="1mo"):
     
     try:
         # Download historical data
-        hist_df = yf.download(symbols_to_fetch, period=yf_period, interval=yf_interval, group_by='ticker')
+        hist_df = yf.download(symbols_to_fetch, period=yf_period, interval=yf_interval, group_by='ticker', progress=False)
         if hist_df.empty:
             return []
             
-        # ✨ 超級關鍵修復 1：刪除重複的日期索引（徹底解決跨市場時區重疊造成的重複列魔王）
+        # 徹底移除跨市場重複日期索引
         hist_df = hist_df[~hist_df.index.duplicated(keep='last')]
-            
-        # ✨ 超級關鍵修復 2：雙向填補空值（先向前填補假日，再向後填補開頭空缺），確保天天有數字
+        # 進行雙向數值填補，完美銜接各市場休假空窗
         hist_df = hist_df.ffill().bfill()
             
         # Get list of index dates
@@ -265,8 +264,11 @@ def fetch_historical_performance(assets_list, period="1mo"):
                     val = hist_df.loc[date, "Close"]
                 else:
                     val = hist_df.loc[date, ("USDTWD=X", "Close")]
-                if not pd.isna(val):
-                    fx_rate = val
+                
+                if isinstance(val, pd.Series):
+                    val = val.dropna().iloc[-1] if not val.dropna().empty else None
+                if val is not None and not pd.isna(val):
+                    fx_rate = float(val)
             except Exception:
                 pass
                 
@@ -287,8 +289,12 @@ def fetch_historical_performance(assets_list, period="1mo"):
                         val = hist_df.loc[date, "Close"]
                     else:
                         val = hist_df.loc[date, (sym, "Close")]
-                    if not pd.isna(val):
-                        price = val
+                    
+                    if isinstance(val, pd.Series):
+                        val = val.dropna().iloc[-1] if not val.dropna().empty else None
+                        
+                    if val is not None and not pd.isna(val):
+                        price = float(val)
                 except Exception:
                     pass
                 
@@ -318,7 +324,6 @@ def fetch_historical_performance(assets_list, period="1mo"):
             
         return chart_data
     except Exception as e:
-        # Fallback empty
         return []
 
 # ----------------- Main Controller -----------------
@@ -366,9 +371,7 @@ with st.sidebar:
             if not new_name or not new_sym:
                 st.error("Please provide both a Display Name and Symbol.")
             else:
-                # Clean symbol
                 clean_sym = new_sym.strip().upper()
-                # Construct new asset entry
                 asset_id = f"{clean_sym}_{int(datetime.now().timestamp())}"
                 new_asset_entry = {
                     "id": asset_id,
@@ -382,7 +385,7 @@ with st.sidebar:
                 current_list.append(new_asset_entry)
                 st.session_state.assets = current_list
                 save_assets(current_list)
-                st.cache_data.clear() # clear quotes cache
+                st.cache_data.clear()
                 st.success(f"Added {new_name} ({clean_sym})!")
                 st.rerun()
 
@@ -519,14 +522,13 @@ with col_right:
     for a in portfolio:
         cat = a["category"]
         alloc_totals[cat] = alloc_totals.get(cat, 0.0) + a["totalValueTWD"]
-        
+    
     df_alloc = pd.DataFrame([
         {"Category": CATEGORY_LABELS[k], "Value": v, "Color": CATEGORY_COLORS[k]}
         for k, v in alloc_totals.items() if v > 0
     ])
     
     if not df_alloc.empty:
-        # Donut Chart with matching theme colors
         fig_pie = px.pie(
             df_alloc, 
             values="Value", 
@@ -560,7 +562,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     if not cat_assets:
         continue
         
-    # Sort descending based on total TWD value
     cat_assets = sorted(cat_assets, key=lambda x: x["totalValueTWD"], reverse=True)
     
     cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
@@ -585,7 +586,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         is_pos = asset["dayChangePercent"] >= 0
         symbol_only = asset["symbol"].split(".")[0]
         
-        # Gain string matching requirement: Percent change accompanied by TWD value
         if cat_key == "cash":
             change_str = "-"
             price_str = "-"
@@ -594,8 +594,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             twd_sign = "+" if is_pos else "-"
             abs_twd_val = format_currency_twd(abs(asset["dayChangeTWD"]))
             
-            # The user request #4: 在百分比的後方 用同樣的字體跟顏色 顯示 該資產漲跌的金額
-            # Same font color handled by placing it in the same output block
             color_hex = "#34D399" if is_pos else "#F87171"
             change_str = f"<span style='color:{color_hex}; font-family:monospace;'>{pct_sign}{asset['dayChangePercent']:.2f}% ({twd_sign}{abs_twd_val})</span>"
             price_str = format_currency_foreign(asset["currentPrice"], asset["currency"])
@@ -630,7 +628,6 @@ asset_options = {a["id"]: f"{CATEGORY_LABELS[a['category']]} - {a['symbol']} ({a
 selected_id = st.selectbox("Select Asset to Adjust", options=list(asset_options.keys()), format_func=lambda x: asset_options[x])
 
 if selected_id:
-    # Retrieve current active asset
     tgt = next((a for a in portfolio if a["id"] == selected_id), None)
     
     if tgt:
@@ -638,7 +635,6 @@ if selected_id:
         
         with manage_col_1:
             st.markdown(f"**Current Holdings**: `{tgt['quantity']:,.5f}`")
-            # Quick actions
             trade_type = st.radio("Action Type", ["No quick adjustments (直接修改數量)", "Buy (買入資產)", "Sell (賣出資產)"])
             
         with manage_col_2:
@@ -648,7 +644,6 @@ if selected_id:
             if "No" not in trade_type:
                 trade_volume = st.number_input("Transaction Quantity", min_value=0.0, step=1.0, value=0.0, format="%.5f")
                 
-                # Dynamic calculations
                 if "Buy" in trade_type:
                     projected_quantity = current_qty + trade_volume
                 else:
@@ -667,39 +662,4 @@ if selected_id:
             act_col1, act_col2 = st.columns(2)
             with act_col1:
                 if st.button("💾 Save Action", use_container_width=True):
-                    # Update local asset
-                    all_assets = load_assets()
-                    for idx, a in enumerate(all_assets):
-                        # match by id or symbol
-                        if (a.get("id") == tgt["id"]) or (a["symbol"] == tgt["symbol"] and a.get("id") is None):
-                            all_assets[idx]["quantity"] = float(projected_quantity)
-                            all_assets[idx]["name"] = edit_name
-                            break
-                            
-                    st.session_state.assets = all_assets
-                    save_assets(all_assets)
-                    st.cache_data.clear() # invalidate prices
-                    st.toast("Holding quantities successfully updated!", icon="💾")
-                    st.rerun()
-                    
-            with act_col2:
-                if tgt["category"] == "cash":
-                    st.write("(Cash cannot be removed)")
-                elif st.button("🗑️ Remove Asset", use_container_width=True, type="primary"):
-                    all_assets = load_assets()
-                    # filter out the deleted asset
-                    filtered = [a for a in all_assets if not (a.get("id") == tgt["id"] or (a["symbol"] == tgt["symbol"] and a.get("id") is None))]
-                    st.session_state.assets = filtered
-                    save_assets(filtered)
-                    st.cache_data.clear()
-                    st.toast(f"Removed {tgt['name']} from asset list", icon="🗑️")
-                    st.rerun()
-
-# Footer StatusBar
-st.markdown("---")
-st.markdown(
-    "<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>"
-    f"Tony's Asset Dashboard • Live Sync via Yahoo Finance • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    "</div>", 
-    unsafe_allow_html=True
-)
+                    all_assets = load
