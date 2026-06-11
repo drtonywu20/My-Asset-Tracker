@@ -139,18 +139,24 @@ def fetch_realtime_market_data(assets_list):
                 price = t.fast_info.get('last_price', None)
                 prev_close = t.fast_info.get('previous_close', None)
                 
-                # Fetch basic info fallback
-                if price is None:
-                    # fetch 1d history to get last close
-                    h = t.history(period="2d")
-                    if not h.empty:
-                        price = h['Close'].iloc[-1]
-                        prev_close = h['Close'].iloc[-2] if len(h) > 1 else price
+                # 排除 yfinance 傳回的異常 nan 空值
+                if pd.isna(price): price = None
+                if pd.isna(prev_close): prev_close = None
                 
-                if price is not None:
+                # Fetch basic info fallback (拉長到 5 天，確保能跨越長週末找上一個交易日)
+                if price is None:
+                    h = t.history(period="5d")
+                    if not h.empty:
+                        valid_closes = h['Close'].dropna() # 過濾掉空值
+                        if not valid_closes.empty:
+                            price = valid_closes.iloc[-1]
+                            prev_close = valid_closes.iloc[-2] if len(valid_closes) > 1 else price
+                
+                # 確認安全後再儲存
+                if price is not None and not pd.isna(price):
                     quote_data[sym] = {
-                        "price": price,
-                        "prev_close": prev_close or price
+                        "price": float(price),
+                        "prev_close": float(prev_close) if prev_close is not None and not pd.isna(prev_close) else float(price)
                     }
             except Exception as e:
                 # Fallback standard
