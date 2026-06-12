@@ -7,6 +7,14 @@ import json
 import os
 from datetime import datetime, timedelta
 
+# ✨ 嘗試匯入 Firebase (防呆：若伺服器還沒安裝也不會崩潰)
+try:
+    import firebase_admin
+    from firebase_admin import credentials, firestore
+    FIREBASE_AVAILABLE = True
+except ImportError:
+    FIREBASE_AVAILABLE = False
+
 # Set page configuration
 st.set_page_config(
     page_title="Tony's Asset Dashboard",
@@ -25,19 +33,16 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #64748B !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     
-    /* 統一樣式：指標卡片與彈出選單 */
     .css-1r6g72q, .stCollapse { border: 1px solid #1E293B !important; background-color: #0F172A !important; border-radius: 12px; padding: 1rem; }
     
-    /* ✨ 新增：客製化 st.container(border=True) 讓資產類別變成獨立的深色卡片 */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
         border: 1px solid #1E293B !important;
-        background-color: #111827 !important; /* 稍微亮一點的深藍色背景 */
+        background-color: #111827 !important; 
         border-radius: 16px;
         padding: 1.5rem 1rem;
         margin-bottom: 1.5rem;
     }
     
-    /* 互動式表格內的線條與表頭 */
     .row-divider { border-bottom: 1px solid #1E293B; margin-top: 0.5rem; margin-bottom: 0.5rem; }
     .table-header { color: #94A3B8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
@@ -46,37 +51,75 @@ st.markdown("""
 # Path to local database
 DB_FILE = "assets.json"
 
-# Default fallback/initial assets
 DEFAULT_ASSETS = [
-    {"name": "元大台灣50正2", "symbol": "00631L.TW", "category": "tw_stock", "quantity": 131000.0},
-    {"name": "00981A", "symbol": "00981A.TW", "category": "tw_stock", "quantity": 18000.0},
-    {"name": "Berkshire Hathaway Inc.", "symbol": "BRK-B", "category": "us_stock", "quantity": 65.0},
-    {"name": "Tesla, Inc.", "symbol": "TSLA", "category": "us_stock", "quantity": 155.4},
-    {"name": "SPDR Gold MiniShares", "symbol": "GLDM", "category": "us_stock", "quantity": 189.0},
-    {"name": "iShares Russell Top 200 Growth ETF", "symbol": "IWY", "category": "us_stock", "quantity": 66.0},
-    {"name": "MicroStrategy Inc.", "symbol": "MSTR", "category": "us_stock", "quantity": 13.0},
-    {"name": "NVIDIA Corporation", "symbol": "NVDA", "category": "us_stock", "quantity": 110.0},
-    {"name": "Bitcoin", "symbol": "BTC-USD", "category": "crypto", "quantity": 0.09869},
-    {"name": "Ethereum", "symbol": "ETH-USD", "category": "crypto", "quantity": 0.90},
-    {"name": "Cash (TWD)", "symbol": "TWD", "category": "cash", "quantity": 1000000.0}
+    {"name": "元大台灣50正2", "symbol": "00631L.TW", "category": "tw_stock", "quantity": 131000.0, "average_cost": 30.0},
+    {"name": "00981A", "symbol": "00981A.TW", "category": "tw_stock", "quantity": 18000.0, "average_cost": 25.0},
+    {"name": "Berkshire Hathaway Inc.", "symbol": "BRK-B", "category": "us_stock", "quantity": 65.0, "average_cost": 400.0},
+    {"name": "Tesla, Inc.", "symbol": "TSLA", "category": "us_stock", "quantity": 155.4, "average_cost": 200.0},
+    {"name": "SPDR Gold MiniShares", "symbol": "GLDM", "category": "us_stock", "quantity": 189.0, "average_cost": 70.0},
+    {"name": "iShares Russell Top 200 Growth ETF", "symbol": "IWY", "category": "us_stock", "quantity": 66.0, "average_cost": 250.0},
+    {"name": "MicroStrategy Inc.", "symbol": "MSTR", "category": "us_stock", "quantity": 13.0, "average_cost": 100.0},
+    {"name": "NVIDIA Corporation", "symbol": "NVDA", "category": "us_stock", "quantity": 110.0, "average_cost": 100.0},
+    {"name": "Bitcoin", "symbol": "BTC-USD", "category": "crypto", "quantity": 0.09869, "average_cost": 60000.0},
+    {"name": "Ethereum", "symbol": "ETH-USD", "category": "crypto", "quantity": 0.90, "average_cost": 2500.0},
+    {"name": "Cash (TWD)", "symbol": "TWD", "category": "cash", "quantity": 1000000.0, "average_cost": 1.0}
 ]
 
 CATEGORY_LABELS = {"tw_stock": "Taiwan Stocks", "us_stock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash & Equivalents"}
 CATEGORY_COLORS = {"tw_stock": "#3B82F6", "us_stock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}
 
-# ----------------- Helper Functions -----------------
+# ----------------- Firebase Initialization -----------------
+
+@st.cache_resource
+def get_db():
+    """初始化並取得 Firebase 資料庫連線"""
+    if FIREBASE_AVAILABLE and "firebase" in st.secrets:
+        try:
+            if not firebase_admin._apps:
+                cred_dict = dict(st.secrets["firebase"])
+                # 修復密鑰換行符號問題 (Streamlit Secrets 常見問題)
+                if "private_key" in cred_dict:
+                    cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
+                
+                cred = credentials.Certificate(cred_dict)
+                firebase_admin.initialize_app(cred)
+            return firestore.client()
+        except Exception as e:
+            return None
+    return None
+
+# ----------------- Helper Functions (Load / Save) -----------------
 
 def load_assets():
+    """從 Firebase 讀取資料，若失敗則退回讀取本機 json，再失敗則用預設值"""
+    db = get_db()
+    if db is not None:
+        try:
+            doc = db.collection("portfolios").document("tony_portfolio").get()
+            if doc.exists:
+                return doc.to_dict().get("assets", DEFAULT_ASSETS)
+        except Exception:
+            pass # 若網路有問題，默默退回使用本機檔案
+            
     if os.path.exists(DB_FILE):
         try:
             with open(DB_FILE, "r", encoding="utf-8") as f: return json.load(f)
         except Exception: return DEFAULT_ASSETS
     else:
-        save_assets(DEFAULT_ASSETS)
         return DEFAULT_ASSETS
 
 def save_assets(assets_list):
+    """將資料同步寫入 Firebase 與本機端備份"""
+    # 1. 本機備份 (確保任何情況下都有存檔)
     with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(assets_list, f, ensure_ascii=False, indent=2)
+    
+    # 2. 雲端同步
+    db = get_db()
+    if db is not None:
+        try:
+            db.collection("portfolios").document("tony_portfolio").set({"assets": assets_list, "last_updated": datetime.now().isoformat()})
+        except Exception as e:
+            st.toast("Warning: Could not sync to cloud database.", icon="⚠️")
 
 def format_currency_twd(val): return f"NT$ {val:,.0f}"
 
@@ -119,11 +162,15 @@ def fetch_realtime_market_data(assets_list):
     portfolio_assets = []
     for asset in assets_list:
         asset_id = asset.get("id", asset["symbol"])
+        avg_cost = asset.get("average_cost", 0.0) 
+        
         if asset["category"] == "cash":
             portfolio_assets.append({
                 "id": asset_id, "name": asset["name"], "symbol": asset["symbol"], "category": asset["category"],
                 "quantity": asset["quantity"], "currentPrice": 1.0, "currency": "TWD",
-                "totalValueTWD": asset["quantity"], "dayChangePercent": 0.0, "dayChangeTWD": 0.0
+                "average_cost": 1.0, "totalCostTWD": asset["quantity"],
+                "totalValueTWD": asset["quantity"], "dayChangePercent": 0.0, "dayChangeTWD": 0.0,
+                "unrealizedPnlTWD": 0.0, "unrealizedPnlPercent": 0.0
             })
             continue
 
@@ -141,9 +188,15 @@ def fetch_realtime_market_data(assets_list):
         value_prior_twd = prev_close * asset["quantity"] * conversion_rate
         day_change_twd = total_value_twd - value_prior_twd
         
+        total_cost_twd = avg_cost * asset["quantity"] * conversion_rate
+        unrealized_pnl_twd = total_value_twd - total_cost_twd
+        unrealized_pnl_percent = ((current_price - avg_cost) / avg_cost) * 100 if avg_cost > 0 else 0.0
+        
         portfolio_assets.append({
             "id": asset_id, "name": asset["name"], "symbol": asset["symbol"], "category": asset["category"],
             "quantity": asset["quantity"], "currentPrice": current_price, "currency": currency,
+            "average_cost": avg_cost, "totalCostTWD": total_cost_twd, 
+            "unrealizedPnlTWD": unrealized_pnl_twd, "unrealizedPnlPercent": unrealized_pnl_percent,
             "totalValueTWD": total_value_twd, "dayChangePercent": day_change_percent, "dayChangeTWD": day_change_twd
         })
         
@@ -156,7 +209,7 @@ def fetch_historical_performance(assets_list, period="1mo"):
     if not symbols: return []
     symbols_to_fetch = list(set(symbols + ["USDTWD=X"]))
     
-    period_mapping = {"1w": ("7d", "1d"), "1mo": ("1mo", "1d"), "3mo": ("3mo", "1d"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d"), "all": ("max", "1wk")}
+    period_mapping = {"1w": ("7d", "1d"), "1mo": ("1mo", "1d"), "3mo": ("3mo", "1d"), "6mo": ("6mo", "1d"), "1y": ("1y", "1d")}
     yf_period, yf_interval = period_mapping.get(period, ("1mo", "1d"))
     
     chart_data_frames = []
@@ -219,6 +272,16 @@ def fetch_historical_performance(assets_list, period="1mo"):
 
 if "assets" not in st.session_state: st.session_state.assets = load_assets()
 
+# --- Sidebar Connection Status ---
+with st.sidebar:
+    st.markdown("### System Status")
+    if get_db():
+        st.success("🟢 Firebase Cloud Sync: Active")
+        st.caption("Your data is safely backed up to Google Cloud. Hibernation will not erase your settings.")
+    else:
+        st.warning("🟡 Local Storage Mode")
+        st.caption("Cloud database not connected yet. Data will reset if Streamlit hibernates.")
+
 # ----------------- Header & Global Actions -----------------
 
 st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
@@ -240,6 +303,7 @@ with action_c2:
             new_sym = st.text_input("Symbol", placeholder="e.g. 2330.TW or AAPL")
             new_cat = st.selectbox("Category", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
             new_qty = st.number_input("Holding Quantity", min_value=0.0, step=0.1, value=0.0, format="%.5f")
+            new_cost = st.number_input("Average Cost", min_value=0.0, step=0.1, value=0.0, format="%.5f")
             
             if st.form_submit_button("Save to Portfolio", use_container_width=True):
                 if not new_name or not new_sym: 
@@ -248,7 +312,8 @@ with action_c2:
                     clean_sym = new_sym.strip().upper()
                     st.session_state.assets.append({
                         "id": f"{clean_sym}_{int(datetime.now().timestamp())}",
-                        "name": new_name.strip(), "symbol": clean_sym, "category": new_cat, "quantity": float(new_qty)
+                        "name": new_name.strip(), "symbol": clean_sym, "category": new_cat, 
+                        "quantity": float(new_qty), "average_cost": float(new_cost)
                     })
                     save_assets(st.session_state.assets)
                     st.cache_data.clear()
@@ -266,21 +331,30 @@ total_day_change = sum(a["dayChangeTWD"] for a in portfolio)
 prior_net_worth = total_net_worth - total_day_change
 percent_change = (total_day_change / prior_net_worth * 100) if prior_net_worth > 0 else 0.0
 
+total_unrealized_pnl = sum(a["unrealizedPnlTWD"] for a in portfolio if a["category"] != "cash")
+total_cost_basis = sum(a["totalCostTWD"] for a in portfolio if a["category"] != "cash")
+total_unrealized_percent = (total_unrealized_pnl / total_cost_basis * 100) if total_cost_basis > 0 else 0.0
+
 cash_total = sum(a["totalValueTWD"] for a in portfolio if a["category"] == "cash")
 
-m1, m2, m3 = st.columns([2, 1, 1])
+m1, m2, m3, m4 = st.columns([1.5, 1.5, 1, 1])
 with m1:
     ds = "+" if total_day_change >= 0 else ""
     st.metric("Total Net Worth", format_currency_twd(total_net_worth), f"{ds}{percent_change:.2f}% (Day: {ds}{format_currency_twd(total_day_change)})")
-with m2: st.metric("Cash Liquidity", format_currency_twd(cash_total), f"{(cash_total/total_net_worth*100) if total_net_worth>0 else 0:.1f}% of portfolio", delta_color="off")
-with m3: st.metric("USDTWD Exchange Rate", f"NT$ {exchange_rate:.2f}", "Live Yahoo Query")
+with m2:
+    us = "+" if total_unrealized_pnl >= 0 else ""
+    st.metric("Total Unrealized P/L", f"{us}{format_currency_twd(total_unrealized_pnl)}", f"{us}{total_unrealized_percent:.2f}% (All-Time)", delta_color="normal")
+with m3: 
+    st.metric("Cash Liquidity", format_currency_twd(cash_total), f"{(cash_total/total_net_worth*100) if total_net_worth>0 else 0:.1f}% of portfolio", delta_color="off")
+with m4: 
+    st.metric("USDTWD Rate", f"NT$ {exchange_rate:.2f}", "Live Yahoo Query")
 
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
     st.subheader("📈 Performance History")
     chart_p1, chart_p2 = st.columns([2, 3])
-    with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y", "all"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
+    with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
     with chart_p2: selected_class = st.segmented_control("Class", ["total", "twStock", "usStock", "crypto", "cash"], format_func=lambda x: {"total": "Total Portfolio", "twStock": "Taiwan Stocks", "usStock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash Only"}[x], default="total", label_visibility="collapsed")
         
     hist_data = fetch_historical_performance(st.session_state.assets, period=selected_period)
@@ -288,8 +362,6 @@ with col_left:
         df_hist = pd.DataFrame(hist_data)
         fig_area = go.Figure()
         
-        # ✨ 優化 1：移除了 fill="tozeroy"，讓 Plotly 能自動「放大 (Zoom in)」 Y軸比例，讓資產波動變得很明顯！
-        # 加上 line_width 讓純折線圖看起來更俐落、更具科技感
         fig_area.add_trace(go.Scatter(
             x=df_hist["date"], 
             y=df_hist[selected_class], 
@@ -317,7 +389,6 @@ with col_right:
         fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
         fig_pie.update_traces(textinfo="percent+label", textposition="outside", hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
         
-        # ✨ 優化 2：增加了左右的 margin (邊距) 並微調 height，讓圓餅圖本體等比例縮小，不再擁擠
         fig_pie.update_layout(margin=dict(l=60, r=60, t=10, b=10), height=240, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
     else: st.info("No asset holdings.")
@@ -326,13 +397,15 @@ with col_right:
 st.markdown("---")
 st.subheader("📋 Your Asset Ledger")
 
+cols_ratio = [2, 1.2, 1.2, 1.2, 2.2, 2.2, 1.4, 0.8]
+
 for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     cat_assets = sorted([a for a in portfolio if a["category"] == cat_key], key=lambda x: x["totalValueTWD"], reverse=True)
     if not cat_assets: continue
     
-    # ✨ 優化 3：利用 st.container(border=True) 搭配頂部的客製化 CSS，創造出深藍色獨立背景卡片！
     with st.container(border=True):
-        cat_total_val, cat_total_change = sum(a["totalValueTWD"] for a in cat_assets), sum(a["dayChangeTWD"] for a in cat_assets)
+        cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
+        cat_total_change = sum(a["dayChangeTWD"] for a in cat_assets)
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
@@ -340,34 +413,46 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         with ch_2: 
             st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
         
-        hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
+        hc1, hc2, hc3, hc4, hc5, hc6, hc7, hc8 = st.columns(cols_ratio)
         hc1.markdown("<div class='table-header'>Asset</div>", unsafe_allow_html=True)
         hc2.markdown("<div class='table-header'>Holdings</div>", unsafe_allow_html=True)
-        hc3.markdown("<div class='table-header'>Price</div>", unsafe_allow_html=True)
-        hc4.markdown("<div class='table-header'>Day Change</div>", unsafe_allow_html=True)
-        hc5.markdown("<div class='table-header'>Total Value</div>", unsafe_allow_html=True)
-        hc6.markdown("<div class='table-header'>Action</div>", unsafe_allow_html=True)
+        hc3.markdown("<div class='table-header'>Avg Cost</div>", unsafe_allow_html=True)
+        hc4.markdown("<div class='table-header'>Price</div>", unsafe_allow_html=True)
+        hc5.markdown("<div class='table-header'>Day Change</div>", unsafe_allow_html=True)
+        hc6.markdown("<div class='table-header'>Total Return</div>", unsafe_allow_html=True)
+        hc7.markdown("<div class='table-header'>Total Value</div>", unsafe_allow_html=True)
+        hc8.markdown("<div class='table-header'>Act</div>", unsafe_allow_html=True)
         st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
         
         for a in cat_assets:
             is_pos = a["dayChangePercent"] >= 0
-            if cat_key == "cash": change_str, price_str = "-", "-"
+            is_return_pos = a["unrealizedPnlPercent"] >= 0
+            
+            if cat_key == "cash": 
+                change_str, price_str, cost_str, return_str = "-", "-", "-", "-"
             else:
-                color = "#34D399" if is_pos else "#F87171"
-                change_str = f"<span style='color:{color}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
-                price_str = format_currency_foreign(a["currentPrice"], a["currency"])
+                color_day = "#34D399" if is_pos else "#F87171"
+                color_return = "#34D399" if is_return_pos else "#F87171"
                 
-            c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
+                change_str = f"<span style='color:{color_day}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
+                return_str = f"<span style='color:{color_return}; font-family:monospace;'>{'+' if is_return_pos else ''}{a['unrealizedPnlPercent']:.2f}% ({'+' if is_return_pos else '-'}{format_currency_twd(abs(a['unrealizedPnlTWD']))})</span>"
+                price_str = format_currency_foreign(a["currentPrice"], a["currency"])
+                cost_str = format_currency_foreign(a["average_cost"], a["currency"])
+                
+            c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(cols_ratio)
             c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
             c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
-            c3.markdown(price_str)
-            c4.markdown(change_str, unsafe_allow_html=True)
-            c5.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
+            c3.markdown(cost_str)
+            c4.markdown(price_str)
+            c5.markdown(change_str, unsafe_allow_html=True)
+            c6.markdown(return_str, unsafe_allow_html=True)
+            c7.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
             
-            with c6:
+            with c8:
                 with st.popover("⚙️"):
                     st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
                     new_qty = st.number_input("Holdings", min_value=0.0, value=float(a['quantity']), format="%.5f", key=f"qty_{a['id']}")
+                    new_cost = st.number_input("Average Cost", min_value=0.0, value=float(a['average_cost']), format="%.5f", key=f"cost_{a['id']}")
                     
                     btn_col1, btn_col2 = st.columns(2)
                     with btn_col1:
@@ -375,6 +460,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                             for idx, s_asset in enumerate(st.session_state.assets):
                                 if s_asset.get("id", s_asset.get("symbol")) == a.get("id", a.get("symbol")):
                                     st.session_state.assets[idx]["quantity"] = new_qty
+                                    st.session_state.assets[idx]["average_cost"] = new_cost
                                     save_assets(st.session_state.assets)
                                     st.cache_data.clear()
                                     st.rerun()
@@ -392,7 +478,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>"
-    f"Tony's Asset Dashboard • Live Sync via Yahoo Finance • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    f"Tony's Asset Dashboard • Live Sync via Yahoo Finance & Firebase • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     "</div>", 
     unsafe_allow_html=True
 )
