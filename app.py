@@ -351,13 +351,15 @@ if selected_id:
             edit_name = st.text_input("Asset Name", value=tgt["name"])
             a_c1, a_c2 = st.columns(2)
             with a_c1:
-                if st.button("💾 Save", use_container_width=True):
-                    for idx, a in enumerate(st.session_state.assets):
-                        if a.get("id") == tgt["id"]:
-                            st.session_state.assets[idx].update({"quantity": float(proj_qty), "name": edit_name})
-                            save_assets(st.session_state.assets)
-                            st.cache_data.clear()
-                            st.rerun()
+               if st.button("💾 Save", use_container_width=True):
+                for idx, a in enumerate(st.session_state.assets):
+                    # ✨ 核心防呆比對
+                    current_id = a.get("id", a.get("symbol"))
+                    if current_id == tgt["id"]:
+                        st.session_state.assets[idx].update({"quantity": float(proj_qty), "name": edit_name})
+                        save_assets(st.session_state.assets)
+                        st.cache_data.clear()
+                        st.rerun()
             with a_c2:
                 if tgt["category"] != "cash" and st.button("🗑️ Remove", use_container_width=True, type="primary"):
                     st.session_state.assets = [a for a in st.session_state.assets if a.get("id") != tgt["id"]]
