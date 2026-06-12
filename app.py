@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="Tony's Asset Dashboard",
     page_icon="🪙",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="collapsed" # 預設將側邊欄收起
 )
 
 # Custom Styling to match the original React dark cosmic aesthetic
@@ -210,39 +210,43 @@ def fetch_historical_performance(assets_list, period="1mo"):
 
 if "assets" not in st.session_state: st.session_state.assets = load_assets()
 
-with st.sidebar:
-    st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=100&q=80", width=60)
-    st.markdown("<h2 style='margin-top:0;'>Tony's Control Panel</h2>", unsafe_allow_html=True)
+# ----------------- Header & Global Actions -----------------
 
-    st.subheader("Global Commands")
-    if st.button("🔄 Refresh Rates (重新整理報價)", use_container_width=True):
+st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
+st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
+
+# ✨ 將側邊欄功能移至主頁面頂部的 Action Bar
+action_c1, action_c2, action_c3 = st.columns([1.5, 1.5, 7])
+
+with action_c1:
+    if st.button("🔄 Refresh Rates", use_container_width=True):
         st.cache_data.clear()
         st.toast("Refreshed pricing index successfully!", icon="✅")
         st.rerun()
 
-    st.markdown("---")
-    st.subheader("➕ Add New Asset")
-    with st.form("add_asset_form", clear_on_submit=True):
-        new_name = st.text_input("Asset Name", placeholder="e.g. Taiwan Semiconductor")
-        new_sym = st.text_input("Symbol", placeholder="e.g. 2330.TW or AAPL")
-        new_cat = st.selectbox("Category", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
-        new_qty = st.number_input("Holding Quantity", min_value=0.0, step=0.1, value=0.0, format="%.5f")
-        
-        if st.form_submit_button("Add to Portfolio"):
-            if not new_name or not new_sym: st.error("Please provide both a Display Name and Symbol.")
-            else:
-                clean_sym = new_sym.strip().upper()
-                st.session_state.assets.append({
-                    "id": f"{clean_sym}_{int(datetime.now().timestamp())}",
-                    "name": new_name.strip(), "symbol": clean_sym, "category": new_cat, "quantity": float(new_qty)
-                })
-                save_assets(st.session_state.assets)
-                st.cache_data.clear()
-                st.success(f"Added {new_name}!")
-                st.rerun()
+with action_c2:
+    with st.popover("➕ Add Asset", use_container_width=True):
+        st.markdown("**Add New Asset**")
+        with st.form("add_asset_form", clear_on_submit=True):
+            new_name = st.text_input("Asset Name", placeholder="e.g. Taiwan Semiconductor")
+            new_sym = st.text_input("Symbol", placeholder="e.g. 2330.TW or AAPL")
+            new_cat = st.selectbox("Category", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
+            new_qty = st.number_input("Holding Quantity", min_value=0.0, step=0.1, value=0.0, format="%.5f")
+            
+            if st.form_submit_button("Save to Portfolio", use_container_width=True):
+                if not new_name or not new_sym: 
+                    st.error("Please provide both a Display Name and Symbol.")
+                else:
+                    clean_sym = new_sym.strip().upper()
+                    st.session_state.assets.append({
+                        "id": f"{clean_sym}_{int(datetime.now().timestamp())}",
+                        "name": new_name.strip(), "symbol": clean_sym, "category": new_cat, "quantity": float(new_qty)
+                    })
+                    save_assets(st.session_state.assets)
+                    st.cache_data.clear()
+                    st.rerun()
 
-st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
-st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
+st.markdown("---")
 
 with st.spinner("Fetching active markets and calculating TWD values..."):
     exchange_rate, portfolio = fetch_realtime_market_data(st.session_state.assets)
@@ -294,21 +298,18 @@ with col_right:
 st.markdown("---")
 st.subheader("📋 Your Asset Ledger")
 
-# 我們將原本的 HTML Table 升級為互動式的 st.columns
 for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     cat_assets = sorted([a for a in portfolio if a["category"] == cat_key], key=lambda x: x["totalValueTWD"], reverse=True)
     if not cat_assets: continue
     
     cat_total_val, cat_total_change = sum(a["totalValueTWD"] for a in cat_assets), sum(a["dayChangeTWD"] for a in cat_assets)
     
-    # 類別標題區塊
     ch_1, ch_2 = st.columns([3, 1])
     with ch_1: 
         st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
     with ch_2: 
         st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
     
-    # 自訂義表頭 (Table Header)
     hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
     hc1.markdown("<div class='table-header'>Asset</div>", unsafe_allow_html=True)
     hc2.markdown("<div class='table-header'>Holdings</div>", unsafe_allow_html=True)
@@ -318,7 +319,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     hc6.markdown("<div class='table-header'>Action</div>", unsafe_allow_html=True)
     st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
     
-    # 渲染每一列資料
     for a in cat_assets:
         is_pos = a["dayChangePercent"] >= 0
         if cat_key == "cash": change_str, price_str = "-", "-"
@@ -327,7 +327,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             change_str = f"<span style='color:{color}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
             price_str = format_currency_foreign(a["currentPrice"], a["currency"])
             
-        # 建立內容欄位
         c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
         c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
         c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
@@ -335,14 +334,11 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         c4.markdown(change_str, unsafe_allow_html=True)
         c5.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
         
-        # ✨ 新增：在最後一欄直接放入修改的彈出式按鈕 (Popover)
         with c6:
             with st.popover("⚙️"):
                 st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
-                # 使用 number_input 讓你可以直接修改數量
                 new_qty = st.number_input("Holdings", min_value=0.0, value=float(a['quantity']), format="%.5f", key=f"qty_{a['id']}")
                 
-                # 彈出選單內的儲存與刪除按鈕
                 btn_col1, btn_col2 = st.columns(2)
                 with btn_col1:
                     if st.button("💾 Save", key=f"save_{a['id']}", use_container_width=True):
@@ -353,7 +349,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                                 st.cache_data.clear()
                                 st.rerun()
                 with btn_col2:
-                    if cat_key != "cash":  # 確保現金不能被刪除
+                    if cat_key != "cash": 
                         if st.button("🗑️ Del", key=f"del_{a['id']}", use_container_width=True, type="primary"):
                             st.session_state.assets = [s_asset for s_asset in st.session_state.assets if s_asset.get("id", s_asset.get("symbol")) != a.get("id", a.get("symbol"))]
                             save_assets(st.session_state.assets)
@@ -362,7 +358,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                             
         st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
         
-    st.write("") # 增加類別間的間距
+    st.write("") 
 
 # ----------------- Footer -----------------
 st.markdown("---")
