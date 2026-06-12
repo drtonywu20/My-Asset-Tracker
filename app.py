@@ -217,19 +217,10 @@ with st.sidebar:
     st.markdown("<h2 style='margin-top:0;'>Tony's Control Panel</h2>", unsafe_allow_html=True)
 
     st.subheader("Global Commands")
-    col_ref, col_res = st.columns(2)
-    with col_ref:
-        if st.button("🔄 Refresh Rates", use_container_width=True):
-            st.cache_data.clear()
-            st.toast("Refreshed pricing index successfully!", icon="✅")
-            st.rerun()
-    with col_res:
-        if st.button("🧼 Reset Assets", use_container_width=True):
-            st.session_state.assets = DEFAULT_ASSETS.copy()
-            save_assets(DEFAULT_ASSETS)
-            st.cache_data.clear()
-            st.toast("Portfolio reset complete!", icon="🧹")
-            st.rerun()
+    if st.button("🔄 Refresh Rates (重新整理報價)", use_container_width=True):
+        st.cache_data.clear()
+        st.toast("Refreshed pricing index successfully!", icon="✅")
+        st.rerun()
 
     st.markdown("---")
     st.subheader("➕ Add New Asset")
