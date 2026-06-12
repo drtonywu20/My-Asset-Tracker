@@ -12,7 +12,7 @@ st.set_page_config(
     page_title="Tony's Asset Dashboard",
     page_icon="🪙",
     layout="wide",
-    initial_sidebar_state="collapsed" # 預設將側邊欄收起
+    initial_sidebar_state="collapsed"
 )
 
 # Custom Styling to match the original React dark cosmic aesthetic
@@ -24,9 +24,20 @@ st.markdown("""
     .highlight-title { color: #E2E9F4; font-weight: bold; }
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #64748B !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
+    
+    /* 統一樣式：指標卡片與彈出選單 */
     .css-1r6g72q, .stCollapse { border: 1px solid #1E293B !important; background-color: #0F172A !important; border-radius: 12px; padding: 1rem; }
     
-    /* Custom styling for our new interactive table rows */
+    /* ✨ 新增：客製化 st.container(border=True) 讓資產類別變成獨立的深色卡片 */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        border: 1px solid #1E293B !important;
+        background-color: #111827 !important; /* 稍微亮一點的深藍色背景 */
+        border-radius: 16px;
+        padding: 1.5rem 1rem;
+        margin-bottom: 1.5rem;
+    }
+    
+    /* 互動式表格內的線條與表頭 */
     .row-divider { border-bottom: 1px solid #1E293B; margin-top: 0.5rem; margin-bottom: 0.5rem; }
     .table-header { color: #94A3B8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
@@ -78,7 +89,6 @@ def format_currency_foreign(val, currency):
 
 @st.cache_data(ttl=300)
 def fetch_realtime_market_data(assets_list):
-    """最純粹的獨立抓取法：不計算時區、不刪除行數，直接拿 yfinance 過濾好雜訊的最新日K線"""
     quote_data = {}
     exchange_rate = 32.5
     
@@ -142,7 +152,6 @@ def fetch_realtime_market_data(assets_list):
 
 @st.cache_data(ttl=600)
 def fetch_historical_performance(assets_list, period="1mo"):
-    """使用分離合併法，徹底解決時區衝突造成的歷史圖表崩潰"""
     symbols = [a["symbol"] for a in assets_list if a["category"] != "cash"]
     if not symbols: return []
     symbols_to_fetch = list(set(symbols + ["USDTWD=X"]))
@@ -215,7 +224,6 @@ if "assets" not in st.session_state: st.session_state.assets = load_assets()
 st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
 st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
 
-# ✨ 將側邊欄功能移至主頁面頂部的 Action Bar
 action_c1, action_c2, action_c3 = st.columns([1.5, 1.5, 7])
 
 with action_c1:
@@ -279,8 +287,26 @@ with col_left:
     if hist_data:
         df_hist = pd.DataFrame(hist_data)
         fig_area = go.Figure()
-        fig_area.add_trace(go.Scatter(x=df_hist["date"], y=df_hist[selected_class], mode="lines", fill="tozeroy", line_color={"total": "#6366f1", "twStock": "#3B82F6", "usStock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}.get(selected_class, "#6366f1"), name=selected_class, hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"))
-        fig_area.update_layout(margin=dict(l=20, r=20, t=10, b=10), height=280, paper_bgcolor="#0B0E14", plot_bgcolor="rgba(0,0,0,0)", xaxis=dict(showgrid=False, tickfont=dict(color="#A0AEC0", size=10)), yaxis=dict(showgrid=True, gridcolor="#1E293B", tickfont=dict(color="#A0AEC0", size=10), tickprefix="NT$ "))
+        
+        # ✨ 優化 1：移除了 fill="tozeroy"，讓 Plotly 能自動「放大 (Zoom in)」 Y軸比例，讓資產波動變得很明顯！
+        # 加上 line_width 讓純折線圖看起來更俐落、更具科技感
+        fig_area.add_trace(go.Scatter(
+            x=df_hist["date"], 
+            y=df_hist[selected_class], 
+            mode="lines", 
+            line=dict(color={"total": "#6366f1", "twStock": "#3B82F6", "usStock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}.get(selected_class, "#6366f1"), width=3), 
+            name=selected_class, 
+            hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
+        ))
+        
+        fig_area.update_layout(
+            margin=dict(l=20, r=20, t=10, b=10), 
+            height=280, 
+            paper_bgcolor="#0B0E14", 
+            plot_bgcolor="rgba(0,0,0,0)", 
+            xaxis=dict(showgrid=False, tickfont=dict(color="#A0AEC0", size=10)), 
+            yaxis=dict(showgrid=True, gridcolor="#1E293B", tickfont=dict(color="#A0AEC0", size=10), tickprefix="NT$ ")
+        )
         st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
     else: st.info("Loading performance timeline...")
 
@@ -290,7 +316,9 @@ with col_right:
     if not df_alloc.empty:
         fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
         fig_pie.update_traces(textinfo="percent+label", textposition="outside", hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
-        fig_pie.update_layout(margin=dict(l=0, r=0, t=10, b=10), height=280, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
+        
+        # ✨ 優化 2：增加了左右的 margin (邊距) 並微調 height，讓圓餅圖本體等比例縮小，不再擁擠
+        fig_pie.update_layout(margin=dict(l=60, r=60, t=10, b=10), height=240, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
         st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
     else: st.info("No asset holdings.")
 
@@ -302,63 +330,63 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     cat_assets = sorted([a for a in portfolio if a["category"] == cat_key], key=lambda x: x["totalValueTWD"], reverse=True)
     if not cat_assets: continue
     
-    cat_total_val, cat_total_change = sum(a["totalValueTWD"] for a in cat_assets), sum(a["dayChangeTWD"] for a in cat_assets)
-    
-    ch_1, ch_2 = st.columns([3, 1])
-    with ch_1: 
-        st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
-    with ch_2: 
-        st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
-    
-    hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
-    hc1.markdown("<div class='table-header'>Asset</div>", unsafe_allow_html=True)
-    hc2.markdown("<div class='table-header'>Holdings</div>", unsafe_allow_html=True)
-    hc3.markdown("<div class='table-header'>Price</div>", unsafe_allow_html=True)
-    hc4.markdown("<div class='table-header'>Day Change</div>", unsafe_allow_html=True)
-    hc5.markdown("<div class='table-header'>Total Value</div>", unsafe_allow_html=True)
-    hc6.markdown("<div class='table-header'>Action</div>", unsafe_allow_html=True)
-    st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
-    
-    for a in cat_assets:
-        is_pos = a["dayChangePercent"] >= 0
-        if cat_key == "cash": change_str, price_str = "-", "-"
-        else:
-            color = "#34D399" if is_pos else "#F87171"
-            change_str = f"<span style='color:{color}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
-            price_str = format_currency_foreign(a["currentPrice"], a["currency"])
-            
-        c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
-        c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
-        c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
-        c3.markdown(price_str)
-        c4.markdown(change_str, unsafe_allow_html=True)
-        c5.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
+    # ✨ 優化 3：利用 st.container(border=True) 搭配頂部的客製化 CSS，創造出深藍色獨立背景卡片！
+    with st.container(border=True):
+        cat_total_val, cat_total_change = sum(a["totalValueTWD"] for a in cat_assets), sum(a["dayChangeTWD"] for a in cat_assets)
         
-        with c6:
-            with st.popover("⚙️"):
-                st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
-                new_qty = st.number_input("Holdings", min_value=0.0, value=float(a['quantity']), format="%.5f", key=f"qty_{a['id']}")
+        ch_1, ch_2 = st.columns([3, 1])
+        with ch_1: 
+            st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
+        with ch_2: 
+            st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
+        
+        hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
+        hc1.markdown("<div class='table-header'>Asset</div>", unsafe_allow_html=True)
+        hc2.markdown("<div class='table-header'>Holdings</div>", unsafe_allow_html=True)
+        hc3.markdown("<div class='table-header'>Price</div>", unsafe_allow_html=True)
+        hc4.markdown("<div class='table-header'>Day Change</div>", unsafe_allow_html=True)
+        hc5.markdown("<div class='table-header'>Total Value</div>", unsafe_allow_html=True)
+        hc6.markdown("<div class='table-header'>Action</div>", unsafe_allow_html=True)
+        st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
+        
+        for a in cat_assets:
+            is_pos = a["dayChangePercent"] >= 0
+            if cat_key == "cash": change_str, price_str = "-", "-"
+            else:
+                color = "#34D399" if is_pos else "#F87171"
+                change_str = f"<span style='color:{color}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
+                price_str = format_currency_foreign(a["currentPrice"], a["currency"])
                 
-                btn_col1, btn_col2 = st.columns(2)
-                with btn_col1:
-                    if st.button("💾 Save", key=f"save_{a['id']}", use_container_width=True):
-                        for idx, s_asset in enumerate(st.session_state.assets):
-                            if s_asset.get("id", s_asset.get("symbol")) == a.get("id", a.get("symbol")):
-                                st.session_state.assets[idx]["quantity"] = new_qty
+            c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
+            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
+            c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
+            c3.markdown(price_str)
+            c4.markdown(change_str, unsafe_allow_html=True)
+            c5.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
+            
+            with c6:
+                with st.popover("⚙️"):
+                    st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
+                    new_qty = st.number_input("Holdings", min_value=0.0, value=float(a['quantity']), format="%.5f", key=f"qty_{a['id']}")
+                    
+                    btn_col1, btn_col2 = st.columns(2)
+                    with btn_col1:
+                        if st.button("💾 Save", key=f"save_{a['id']}", use_container_width=True):
+                            for idx, s_asset in enumerate(st.session_state.assets):
+                                if s_asset.get("id", s_asset.get("symbol")) == a.get("id", a.get("symbol")):
+                                    st.session_state.assets[idx]["quantity"] = new_qty
+                                    save_assets(st.session_state.assets)
+                                    st.cache_data.clear()
+                                    st.rerun()
+                    with btn_col2:
+                        if cat_key != "cash": 
+                            if st.button("🗑️ Del", key=f"del_{a['id']}", use_container_width=True, type="primary"):
+                                st.session_state.assets = [s_asset for s_asset in st.session_state.assets if s_asset.get("id", s_asset.get("symbol")) != a.get("id", a.get("symbol"))]
                                 save_assets(st.session_state.assets)
                                 st.cache_data.clear()
                                 st.rerun()
-                with btn_col2:
-                    if cat_key != "cash": 
-                        if st.button("🗑️ Del", key=f"del_{a['id']}", use_container_width=True, type="primary"):
-                            st.session_state.assets = [s_asset for s_asset in st.session_state.assets if s_asset.get("id", s_asset.get("symbol")) != a.get("id", a.get("symbol"))]
-                            save_assets(st.session_state.assets)
-                            st.cache_data.clear()
-                            st.rerun()
-                            
-        st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
-        
-    st.write("") 
+                                
+            st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
 
 # ----------------- Footer -----------------
 st.markdown("---")
