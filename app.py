@@ -25,6 +25,10 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #64748B !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     .css-1r6g72q, .stCollapse { border: 1px solid #1E293B !important; background-color: #0F172A !important; border-radius: 12px; padding: 1rem; }
+    
+    /* Custom styling for our new interactive table rows */
+    .row-divider { border-bottom: 1px solid #1E293B; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .table-header { color: #94A3B8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -78,27 +82,23 @@ def fetch_realtime_market_data(assets_list):
     quote_data = {}
     exchange_rate = 32.5
     
-    # 1. 抓取匯率
     try:
         fx_hist = yf.Ticker("USDTWD=X").history(period="5d", interval="1d")
         if not fx_hist.empty:
             exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
     except: pass
 
-    # 2. 獨立抓取每個資產
     for asset in assets_list:
         if asset["category"] == "cash": continue
         sym = asset["symbol"]
         if sym in quote_data: continue
             
         try:
-            # 直接索取最近 5 天的常規日 K 線
             hist = yf.Ticker(sym).history(period="5d", interval="1d")
             hist = hist.dropna(subset=['Close'])
             
             if hist.empty: continue
             
-            # 大道至簡：最後一筆就是最新的（開盤=即時價，休盤=正式收盤價）
             price = hist['Close'].iloc[-1]
             prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else price
             
@@ -106,7 +106,6 @@ def fetch_realtime_market_data(assets_list):
         except Exception:
             pass
             
-    # 3. 結算資產總值
     portfolio_assets = []
     for asset in assets_list:
         asset_id = asset.get("id", asset["symbol"])
@@ -166,13 +165,12 @@ def fetch_historical_performance(assets_list, period="1mo"):
     if not chart_data_frames: return []
     
     hist_df = pd.concat(chart_data_frames, axis=1)
-    hist_df = hist_df.ffill().bfill()
+    hist_df = hist_df.sort_index().ffill().bfill()
     
     dates = hist_df.index
     chart_data = []
     
-    cash_asset = next((a for a in assets_list if a["category"] == "cash"), None)
-    cash_value = cash_asset["quantity"] if cash_asset else 0.0
+    cash_value = sum(a["quantity"] for a in assets_list if a["category"] == "cash")
     
     for date in dates:
         fx_rate = 32.5
@@ -256,8 +254,7 @@ total_day_change = sum(a["dayChangeTWD"] for a in portfolio)
 prior_net_worth = total_net_worth - total_day_change
 percent_change = (total_day_change / prior_net_worth * 100) if prior_net_worth > 0 else 0.0
 
-cash_asset = next((a for a in portfolio if a["category"] == "cash"), None)
-cash_total = cash_asset["totalValueTWD"] if cash_asset else 0.0
+cash_total = sum(a["totalValueTWD"] for a in portfolio if a["category"] == "cash")
 
 m1, m2, m3 = st.columns([2, 1, 1])
 with m1:
@@ -293,20 +290,35 @@ with col_right:
         st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
     else: st.info("No asset holdings.")
 
-# ----------------- Grouped Asset Table -----------------
+# ----------------- Grouped Asset Interactive Table -----------------
 st.markdown("---")
 st.subheader("📋 Your Asset Ledger")
 
+# 我們將原本的 HTML Table 升級為互動式的 st.columns
 for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     cat_assets = sorted([a for a in portfolio if a["category"] == cat_key], key=lambda x: x["totalValueTWD"], reverse=True)
     if not cat_assets: continue
     
     cat_total_val, cat_total_change = sum(a["totalValueTWD"] for a in cat_assets), sum(a["dayChangeTWD"] for a in cat_assets)
+    
+    # 類別標題區塊
     ch_1, ch_2 = st.columns([3, 1])
-    with ch_1: st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
-    with ch_2: st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
-         
-    tbl_data = []
+    with ch_1: 
+        st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
+    with ch_2: 
+        st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
+    
+    # 自訂義表頭 (Table Header)
+    hc1, hc2, hc3, hc4, hc5, hc6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
+    hc1.markdown("<div class='table-header'>Asset</div>", unsafe_allow_html=True)
+    hc2.markdown("<div class='table-header'>Holdings</div>", unsafe_allow_html=True)
+    hc3.markdown("<div class='table-header'>Price</div>", unsafe_allow_html=True)
+    hc4.markdown("<div class='table-header'>Day Change</div>", unsafe_allow_html=True)
+    hc5.markdown("<div class='table-header'>Total Value</div>", unsafe_allow_html=True)
+    hc6.markdown("<div class='table-header'>Action</div>", unsafe_allow_html=True)
+    st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
+    
+    # 渲染每一列資料
     for a in cat_assets:
         is_pos = a["dayChangePercent"] >= 0
         if cat_key == "cash": change_str, price_str = "-", "-"
@@ -315,61 +327,44 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             change_str = f"<span style='color:{color}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
             price_str = format_currency_foreign(a["currentPrice"], a["currency"])
             
-        tbl_data.append({
-            "Asset": f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>",
-            "Holdings": f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'),
-            "Price": price_str, "Day Change": change_str, "Total Value": f"<b>{format_currency_twd(a['totalValueTWD'])}</b>"
-        })
+        # 建立內容欄位
+        c1, c2, c3, c4, c5, c6 = st.columns([2.5, 1.5, 2, 2.5, 2, 1])
+        c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
+        c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
+        c3.markdown(price_str)
+        c4.markdown(change_str, unsafe_allow_html=True)
+        c5.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
         
-    st.write(pd.DataFrame(tbl_data).to_html(escape=False, index=False, justify="left", classes="stTable"), unsafe_allow_html=True)
-    st.write("")
-
-# ----------------- Manage Holdings -----------------
-st.markdown("---")
-st.subheader("⚙️ Manage & Adjust Asset Quantity (買賣與數量修改)")
-
-asset_options = {a["id"]: f"{CATEGORY_LABELS[a['category']]} - {a['symbol']} ({a['name']})" for a in portfolio}
-selected_id = st.selectbox("Select Asset to Adjust", options=list(asset_options.keys()), format_func=lambda x: asset_options[x])
-
-if selected_id:
-    tgt = next((a for a in portfolio if a["id"] == selected_id), None)
-    if tgt:
-        m_c1, m_c2, m_c3 = st.columns([1, 1, 1])
-        with m_c1:
-            st.markdown(f"**Current Holdings**: `{tgt['quantity']:,.5f}`")
-            trade_type = st.radio("Action Type", ["No quick adjustments (直接修改數量)", "Buy (買入資產)", "Sell (賣出資產)"])
-        with m_c2:
-            st.markdown("**Transaction Size**" if "No" not in trade_type else "**Holding Settings**")
-            if "No" not in trade_type:
-                vol = st.number_input("Quantity", min_value=0.0, step=1.0, value=0.0, format="%.5f")
-                proj_qty = tgt["quantity"] + vol if "Buy" in trade_type else max(0.0, tgt["quantity"] - vol)
-                st.write(f"Projected: `{tgt['quantity']:,.5f}` ➔ **`{proj_qty:,.5f}`**")
-            else:
-                proj_qty = st.number_input("Modify Total Directly", min_value=0.0, value=tgt["quantity"], format="%.5f")
-        with m_c3:
-            st.markdown("**Metadata Settings**")
-            edit_name = st.text_input("Asset Name", value=tgt["name"])
-            a_c1, a_c2 = st.columns(2)
-            
-            with a_c1:
-                if st.button("💾 Save", use_container_width=True):
-                    for idx, a in enumerate(st.session_state.assets):
-                        # 已經修復好的縮排與對齊邏輯
-                        current_id = a.get("id", a.get("symbol"))
-                        if current_id == tgt["id"]:
-                            st.session_state.assets[idx].update({"quantity": float(proj_qty), "name": edit_name})
+        # ✨ 新增：在最後一欄直接放入修改的彈出式按鈕 (Popover)
+        with c6:
+            with st.popover("⚙️"):
+                st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
+                # 使用 number_input 讓你可以直接修改數量
+                new_qty = st.number_input("Holdings", min_value=0.0, value=float(a['quantity']), format="%.5f", key=f"qty_{a['id']}")
+                
+                # 彈出選單內的儲存與刪除按鈕
+                btn_col1, btn_col2 = st.columns(2)
+                with btn_col1:
+                    if st.button("💾 Save", key=f"save_{a['id']}", use_container_width=True):
+                        for idx, s_asset in enumerate(st.session_state.assets):
+                            if s_asset.get("id", s_asset.get("symbol")) == a.get("id", a.get("symbol")):
+                                st.session_state.assets[idx]["quantity"] = new_qty
+                                save_assets(st.session_state.assets)
+                                st.cache_data.clear()
+                                st.rerun()
+                with btn_col2:
+                    if cat_key != "cash":  # 確保現金不能被刪除
+                        if st.button("🗑️ Del", key=f"del_{a['id']}", use_container_width=True, type="primary"):
+                            st.session_state.assets = [s_asset for s_asset in st.session_state.assets if s_asset.get("id", s_asset.get("symbol")) != a.get("id", a.get("symbol"))]
                             save_assets(st.session_state.assets)
                             st.cache_data.clear()
                             st.rerun()
-            
-            with a_c2:
-                if tgt["category"] != "cash" and st.button("🗑️ Remove", use_container_width=True, type="primary"):
-                    # ✨ 這裡把漏掉的安全比對機制補上了！
-                    st.session_state.assets = [a for a in st.session_state.assets if a.get("id", a.get("symbol")) != tgt["id"]]
-                    save_assets(st.session_state.assets)
-                    st.cache_data.clear()
-                    st.rerun()
+                            
+        st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
+        
+    st.write("") # 增加類別間的間距
 
+# ----------------- Footer -----------------
 st.markdown("---")
 st.markdown(
     "<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>"
