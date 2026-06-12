@@ -18,7 +18,7 @@ except ImportError:
 # Set page configuration
 st.set_page_config(
     page_title="Tony's Asset Dashboard",
-    page_icon="🪙",
+    page_icon="🍄",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -45,26 +45,22 @@ st.markdown("""
         transition: all 0.3s ease;
     }
     
-    /* ✨ 新增：利用現代 CSS 賦予各區塊專屬的「漸層背景與頂部重點色框」 */
-    /* Taiwan Stocks (藍色) */
+    /* 利用現代 CSS 賦予各區塊專屬的「漸層背景與頂部重點色框」 */
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-tw_stock) > div {
         background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
         border-color: rgba(59, 130, 246, 0.2) !important;
         border-top: 3px solid #3B82F6 !important;
     }
-    /* US Stocks (紫色) */
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-us_stock) > div {
         background: linear-gradient(180deg, rgba(139, 92, 246, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
         border-color: rgba(139, 92, 246, 0.2) !important;
         border-top: 3px solid #8B5CF6 !important;
     }
-    /* Crypto (黃色) */
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-crypto) > div {
         background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
         border-color: rgba(245, 158, 11, 0.2) !important;
         border-top: 3px solid #F59E0B !important;
     }
-    /* Cash (綠色) */
     div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-cash) > div {
         background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
         border-color: rgba(16, 185, 129, 0.2) !important;
@@ -79,22 +75,30 @@ st.markdown("""
 # Path to local database
 DB_FILE = "assets.json"
 
+# ✨ 加入獨立 ID 與 Account 屬性，並刻意設定兩筆 TSLA 測試合併功能
 DEFAULT_ASSETS = [
-    {"name": "元大台灣50正2", "symbol": "00631L.TW", "category": "tw_stock", "quantity": 131000.0, "average_cost": 30.0},
-    {"name": "00981A", "symbol": "00981A.TW", "category": "tw_stock", "quantity": 18000.0, "average_cost": 25.0},
-    {"name": "Berkshire Hathaway Inc.", "symbol": "BRK-B", "category": "us_stock", "quantity": 65.0, "average_cost": 400.0},
-    {"name": "Tesla, Inc.", "symbol": "TSLA", "category": "us_stock", "quantity": 155.4, "average_cost": 200.0},
-    {"name": "SPDR Gold MiniShares", "symbol": "GLDM", "category": "us_stock", "quantity": 189.0, "average_cost": 70.0},
-    {"name": "iShares Russell Top 200 Growth ETF", "symbol": "IWY", "category": "us_stock", "quantity": 66.0, "average_cost": 250.0},
-    {"name": "MicroStrategy Inc.", "symbol": "MSTR", "category": "us_stock", "quantity": 13.0, "average_cost": 100.0},
-    {"name": "NVIDIA Corporation", "symbol": "NVDA", "category": "us_stock", "quantity": 110.0, "average_cost": 100.0},
-    {"name": "Bitcoin", "symbol": "BTC-USD", "category": "crypto", "quantity": 0.09869, "average_cost": 60000.0},
-    {"name": "Ethereum", "symbol": "ETH-USD", "category": "crypto", "quantity": 0.90, "average_cost": 2500.0},
-    {"name": "Cash (TWD)", "symbol": "TWD", "category": "cash", "quantity": 1000000.0, "average_cost": 1.0}
+    {"id": "00631L_TW", "name": "元大台灣50正2", "symbol": "00631L.TW", "category": "tw_stock", "quantity": 131000.0, "average_cost": 30.0, "account": "Default"},
+    {"id": "00981A_TW", "name": "00981A", "symbol": "00981A.TW", "category": "tw_stock", "quantity": 18000.0, "average_cost": 25.0, "account": "Default"},
+    {"id": "BRKB_US", "name": "Berkshire Hathaway Inc.", "symbol": "BRK-B", "category": "us_stock", "quantity": 65.0, "average_cost": 400.0, "account": "IB"},
+    {"id": "TSLA_IB", "name": "Tesla, Inc.", "symbol": "TSLA", "category": "us_stock", "quantity": 100.0, "average_cost": 200.0, "account": "IB"},
+    {"id": "TSLA_CATHAY", "name": "Tesla, Inc.", "symbol": "TSLA", "category": "us_stock", "quantity": 55.4, "average_cost": 190.0, "account": "Cathay"},
+    {"id": "GLDM_US", "name": "SPDR Gold MiniShares", "symbol": "GLDM", "category": "us_stock", "quantity": 189.0, "average_cost": 70.0, "account": "Cathay"},
+    {"id": "IWY_US", "name": "iShares Russell Top 200 Growth ETF", "symbol": "IWY", "category": "us_stock", "quantity": 66.0, "average_cost": 250.0, "account": "IB"},
+    {"id": "MSTR_US", "name": "MicroStrategy Inc.", "symbol": "MSTR", "category": "us_stock", "quantity": 13.0, "average_cost": 100.0, "account": "IB"},
+    {"id": "NVDA_US", "name": "NVIDIA Corporation", "symbol": "NVDA", "category": "us_stock", "quantity": 110.0, "average_cost": 100.0, "account": "Cathay"},
+    {"id": "BTC_CRYPTO", "name": "Bitcoin", "symbol": "BTC-USD", "category": "crypto", "quantity": 0.09869, "average_cost": 60000.0, "account": "Default"},
+    {"id": "ETH_CRYPTO", "name": "Ethereum", "symbol": "ETH-USD", "category": "crypto", "quantity": 0.90, "average_cost": 2500.0, "account": "Default"},
+    {"id": "TWD_CASH", "name": "Cash (TWD)", "symbol": "TWD", "category": "cash", "quantity": 1000000.0, "average_cost": 1.0, "account": "Default"}
 ]
 
 CATEGORY_LABELS = {"tw_stock": "Taiwan Stocks", "us_stock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash & Equivalents"}
 CATEGORY_COLORS = {"tw_stock": "#3B82F6", "us_stock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}
+
+ACCOUNT_LABELS = {
+    "Default": "預設帳戶 (Default)",
+    "Cathay": "國泰複委託 (Cathay)",
+    "IB": "IB海外券商 (IB)"
+}
 
 # ----------------- Firebase Initialization -----------------
 
@@ -180,11 +184,12 @@ def fetch_realtime_market_data(assets_list):
     for asset in assets_list:
         asset_id = asset.get("id", asset["symbol"])
         avg_cost = asset.get("average_cost", 0.0) 
+        account = asset.get("account", "Default")
         
         if asset["category"] == "cash":
             portfolio_assets.append({
                 "id": asset_id, "name": asset["name"], "symbol": asset["symbol"], "category": asset["category"],
-                "quantity": asset["quantity"], "currentPrice": 1.0, "currency": "TWD",
+                "account": account, "quantity": asset["quantity"], "currentPrice": 1.0, "currency": "TWD",
                 "average_cost": 1.0, "totalCostTWD": asset["quantity"],
                 "totalValueTWD": asset["quantity"], "dayChangePercent": 0.0, "dayChangeTWD": 0.0,
                 "unrealizedPnlTWD": 0.0, "unrealizedPnlPercent": 0.0
@@ -211,7 +216,7 @@ def fetch_realtime_market_data(assets_list):
         
         portfolio_assets.append({
             "id": asset_id, "name": asset["name"], "symbol": asset["symbol"], "category": asset["category"],
-            "quantity": asset["quantity"], "currentPrice": current_price, "currency": currency,
+            "account": account, "quantity": asset["quantity"], "currentPrice": current_price, "currency": currency,
             "average_cost": avg_cost, "totalCostTWD": total_cost_twd, 
             "unrealizedPnlTWD": unrealized_pnl_twd, "unrealizedPnlPercent": unrealized_pnl_percent,
             "totalValueTWD": total_value_twd, "dayChangePercent": day_change_percent, "dayChangeTWD": day_change_twd
@@ -318,6 +323,8 @@ with action_c2:
             new_name = st.text_input("Asset Name", placeholder="e.g. Taiwan Semiconductor")
             new_sym = st.text_input("Symbol", placeholder="e.g. 2330.TW or AAPL")
             new_cat = st.selectbox("Category", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
+            # ✨ 讓使用者可以直接選擇這筆資產存放的券商
+            new_acc = st.selectbox("Broker / Account", options=list(ACCOUNT_LABELS.keys()), format_func=lambda x: ACCOUNT_LABELS[x])
             new_qty = st.number_input("Holding Quantity", min_value=0.0, step=0.1, value=0.0, format="%.5f")
             new_cost = st.number_input("Average Cost", min_value=0.0, step=0.1, value=0.0, format="%.5f")
             
@@ -329,7 +336,7 @@ with action_c2:
                     st.session_state.assets.append({
                         "id": f"{clean_sym}_{int(datetime.now().timestamp())}",
                         "name": new_name.strip(), "symbol": clean_sym, "category": new_cat, 
-                        "quantity": float(new_qty), "average_cost": float(new_cost)
+                        "account": new_acc, "quantity": float(new_qty), "average_cost": float(new_cost)
                     })
                     save_assets(st.session_state.assets)
                     st.cache_data.clear()
@@ -413,14 +420,68 @@ with col_right:
 st.markdown("---")
 st.subheader("📋 Your Asset Ledger")
 
+# ✨ 這裡加入券商專屬的檢視切換器 (US Stocks Filter)
+view_col1, view_col2 = st.columns([2, 5])
+with view_col1:
+    us_broker_view = st.segmented_control(
+        "🇺🇸 US Stocks Filter", 
+        ["Merged", "Cathay", "IB"], 
+        format_func=lambda x: {"Merged": "合併顯示 (All)", "Cathay": "國泰複委託", "IB": "IB海外券商"}[x],
+        default="Merged",
+        label_visibility="collapsed"
+    )
+
 cols_ratio = [2, 1.2, 1.2, 1.2, 2.2, 2.2, 1.4, 0.8]
 
 for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
-    cat_assets = sorted([a for a in portfolio if a["category"] == cat_key], key=lambda x: x["totalValueTWD"], reverse=True)
+    raw_cat_assets = [a for a in portfolio if a["category"] == cat_key]
+    
+    # 若為美股，依據切換器過濾資料
+    if cat_key == "us_stock":
+        if us_broker_view == "Cathay":
+            raw_cat_assets = [a for a in raw_cat_assets if a.get("account") == "Cathay"]
+        elif us_broker_view == "IB":
+            raw_cat_assets = [a for a in raw_cat_assets if a.get("account") == "IB"]
+            
+    if not raw_cat_assets: continue
+    
+    # ✨ 核心：無論是否過濾，一律將相同股票代碼 (symbol) 合併
+    grouped_assets = {}
+    for a in raw_cat_assets:
+        sym = a["symbol"]
+        if sym not in grouped_assets:
+            grouped_assets[sym] = {"symbol": sym, "name": a["name"], "category": a["category"], "currency": a["currency"], "currentPrice": a["currentPrice"], "dayChangePercent": a["dayChangePercent"], "underlying": []}
+        grouped_assets[sym]["underlying"].append(a)
+        
+    cat_assets = []
+    # 進行加權平均與數量加總
+    for sym, grp in grouped_assets.items():
+        tot_qty = sum(u["quantity"] for u in grp["underlying"])
+        if tot_qty <= 0 and grp["category"] != "cash": continue # 防呆：若賣光且不是現金則跳過
+            
+        tot_cost_twd = sum(u["totalCostTWD"] for u in grp["underlying"])
+        tot_val_twd = sum(u["totalValueTWD"] for u in grp["underlying"])
+        tot_day_chg_twd = sum(u["dayChangeTWD"] for u in grp["underlying"])
+        tot_unrealized_twd = sum(u["unrealizedPnlTWD"] for u in grp["underlying"])
+        
+        grp["quantity"] = tot_qty
+        if tot_qty > 0:
+            tot_cost_usd = sum(u["average_cost"] * u["quantity"] for u in grp["underlying"])
+            grp["average_cost"] = tot_cost_usd / tot_qty
+        else:
+            grp["average_cost"] = sum(u["average_cost"] for u in grp["underlying"]) / len(grp["underlying"])
+            
+        grp["totalValueTWD"] = tot_val_twd
+        grp["dayChangeTWD"] = tot_day_chg_twd
+        grp["unrealizedPnlTWD"] = tot_unrealized_twd
+        grp["unrealizedPnlPercent"] = (tot_unrealized_twd / tot_cost_twd * 100) if tot_cost_twd > 0 else 0.0
+        
+        cat_assets.append(grp)
+        
+    cat_assets = sorted(cat_assets, key=lambda x: x["totalValueTWD"], reverse=True)
     if not cat_assets: continue
     
     with st.container(border=True):
-        # ✨ 埋入隱藏的標籤，讓頂部的 CSS 可以辨識這張卡片屬於哪個類別，並塗上對應漸層色
         st.markdown(f"<span class='cat-{cat_key}'></span>", unsafe_allow_html=True)
         
         cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
@@ -428,7 +489,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
-            # 加上圓點點綴標題
             st.markdown(f"#### <span style='color:{CATEGORY_COLORS[cat_key]};'>●</span> {CATEGORY_LABELS[cat_key]}", unsafe_allow_html=True)
         with ch_2: 
             st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
@@ -460,7 +520,10 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                 cost_str = format_currency_foreign(a["average_cost"], a["currency"])
                 
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(cols_ratio)
-            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
+            
+            # 若為合併顯示且有多筆底層帳戶，給予小標記提示
+            multi_tag = f" <span style='font-size:0.65rem; background:#1E293B; padding:2px 4px; border-radius:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
+            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
             c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
             c3.markdown(cost_str)
             c4.markdown(price_str)
@@ -471,26 +534,32 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             with c8:
                 with st.popover("⚙️"):
                     st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
-                    new_qty = st.number_input("Holdings", min_value=0.0, value=float(a['quantity']), format="%.5f", key=f"qty_{a['id']}")
-                    new_cost = st.number_input("Average Cost", min_value=0.0, value=float(a['average_cost']), format="%.5f", key=f"cost_{a['id']}")
-                    
-                    btn_col1, btn_col2 = st.columns(2)
-                    with btn_col1:
-                        if st.button("💾 Save", key=f"save_{a['id']}", use_container_width=True):
-                            for idx, s_asset in enumerate(st.session_state.assets):
-                                if s_asset.get("id", s_asset.get("symbol")) == a.get("id", a.get("symbol")):
-                                    st.session_state.assets[idx]["quantity"] = new_qty
-                                    st.session_state.assets[idx]["average_cost"] = new_cost
+                    # ✨ 展開底下所有帳戶，允許獨立編輯
+                    for i, u in enumerate(a["underlying"]):
+                        acc_label = ACCOUNT_LABELS.get(u.get("account", "Default"), "預設 (Default)")
+                        st.caption(f"Broker: {acc_label}")
+                        new_qty = st.number_input(f"Holdings", min_value=0.0, value=float(u['quantity']), format="%.5f", key=f"qty_{u['id']}")
+                        new_cost = st.number_input(f"Average Cost", min_value=0.0, value=float(u['average_cost']), format="%.5f", key=f"cost_{u['id']}")
+                        
+                        btn_col1, btn_col2 = st.columns(2)
+                        with btn_col1:
+                            if st.button("💾 Save", key=f"save_{u['id']}", use_container_width=True):
+                                for idx, s_asset in enumerate(st.session_state.assets):
+                                    if s_asset.get("id", s_asset.get("symbol")) == u["id"]:
+                                        st.session_state.assets[idx]["quantity"] = new_qty
+                                        st.session_state.assets[idx]["average_cost"] = new_cost
+                                        save_assets(st.session_state.assets)
+                                        st.cache_data.clear()
+                                        st.rerun()
+                        with btn_col2:
+                            if cat_key != "cash": 
+                                if st.button("🗑️ Del", key=f"del_{u['id']}", use_container_width=True, type="primary"):
+                                    st.session_state.assets = [s_asset for s_asset in st.session_state.assets if s_asset.get("id", s_asset.get("symbol")) != u["id"]]
                                     save_assets(st.session_state.assets)
                                     st.cache_data.clear()
                                     st.rerun()
-                    with btn_col2:
-                        if cat_key != "cash": 
-                            if st.button("🗑️ Del", key=f"del_{a['id']}", use_container_width=True, type="primary"):
-                                st.session_state.assets = [s_asset for s_asset in st.session_state.assets if s_asset.get("id", s_asset.get("symbol")) != a.get("id", a.get("symbol"))]
-                                save_assets(st.session_state.assets)
-                                st.cache_data.clear()
-                                st.rerun()
+                        if i < len(a["underlying"]) - 1:
+                            st.divider()
                                 
             st.markdown("<div class='row-divider'></div>", unsafe_allow_html=True)
 
