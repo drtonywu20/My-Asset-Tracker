@@ -35,15 +35,43 @@ st.markdown("""
     
     .css-1r6g72q, .stCollapse { border: 1px solid #1E293B !important; background-color: #0F172A !important; border-radius: 12px; padding: 1rem; }
     
+    /* 預設卡片樣式 */
     div[data-testid="stVerticalBlockBorderWrapper"] > div {
         border: 1px solid #1E293B !important;
         background-color: #111827 !important; 
         border-radius: 16px;
         padding: 1.5rem 1rem;
         margin-bottom: 1.5rem;
+        transition: all 0.3s ease;
     }
     
-    .row-divider { border-bottom: 1px solid #1E293B; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    /* ✨ 新增：利用現代 CSS 賦予各區塊專屬的「漸層背景與頂部重點色框」 */
+    /* Taiwan Stocks (藍色) */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-tw_stock) > div {
+        background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
+        border-color: rgba(59, 130, 246, 0.2) !important;
+        border-top: 3px solid #3B82F6 !important;
+    }
+    /* US Stocks (紫色) */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-us_stock) > div {
+        background: linear-gradient(180deg, rgba(139, 92, 246, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
+        border-color: rgba(139, 92, 246, 0.2) !important;
+        border-top: 3px solid #8B5CF6 !important;
+    }
+    /* Crypto (黃色) */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-crypto) > div {
+        background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
+        border-color: rgba(245, 158, 11, 0.2) !important;
+        border-top: 3px solid #F59E0B !important;
+    }
+    /* Cash (綠色) */
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-cash) > div {
+        background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
+        border-color: rgba(16, 185, 129, 0.2) !important;
+        border-top: 3px solid #10B981 !important;
+    }
+    
+    .row-divider { border-bottom: 1px solid rgba(255,255,255,0.05); margin-top: 0.5rem; margin-bottom: 0.5rem; }
     .table-header { color: #94A3B8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
@@ -72,15 +100,12 @@ CATEGORY_COLORS = {"tw_stock": "#3B82F6", "us_stock": "#8B5CF6", "crypto": "#F59
 
 @st.cache_resource
 def get_db():
-    """初始化並取得 Firebase 資料庫連線"""
     if FIREBASE_AVAILABLE and "firebase" in st.secrets:
         try:
             if not firebase_admin._apps:
                 cred_dict = dict(st.secrets["firebase"])
-                # 修復密鑰換行符號問題 (Streamlit Secrets 常見問題)
                 if "private_key" in cred_dict:
                     cred_dict["private_key"] = cred_dict["private_key"].replace("\\n", "\n")
-                
                 cred = credentials.Certificate(cred_dict)
                 firebase_admin.initialize_app(cred)
             return firestore.client()
@@ -91,7 +116,6 @@ def get_db():
 # ----------------- Helper Functions (Load / Save) -----------------
 
 def load_assets():
-    """從 Firebase 讀取資料，若失敗則退回讀取本機 json，再失敗則用預設值"""
     db = get_db()
     if db is not None:
         try:
@@ -99,7 +123,7 @@ def load_assets():
             if doc.exists:
                 return doc.to_dict().get("assets", DEFAULT_ASSETS)
         except Exception:
-            pass # 若網路有問題，默默退回使用本機檔案
+            pass 
             
     if os.path.exists(DB_FILE):
         try:
@@ -109,11 +133,7 @@ def load_assets():
         return DEFAULT_ASSETS
 
 def save_assets(assets_list):
-    """將資料同步寫入 Firebase 與本機端備份"""
-    # 1. 本機備份 (確保任何情況下都有存檔)
     with open(DB_FILE, "w", encoding="utf-8") as f: json.dump(assets_list, f, ensure_ascii=False, indent=2)
-    
-    # 2. 雲端同步
     db = get_db()
     if db is not None:
         try:
@@ -149,12 +169,9 @@ def fetch_realtime_market_data(assets_list):
         try:
             hist = yf.Ticker(sym).history(period="5d", interval="1d")
             hist = hist.dropna(subset=['Close'])
-            
             if hist.empty: continue
-            
             price = hist['Close'].iloc[-1]
             prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else price
-            
             quote_data[sym] = {"price": float(price), "prev_close": float(prev_close)}
         except Exception:
             pass
@@ -213,7 +230,6 @@ def fetch_historical_performance(assets_list, period="1mo"):
     yf_period, yf_interval = period_mapping.get(period, ("1mo", "1d"))
     
     chart_data_frames = []
-    
     for sym in symbols_to_fetch:
         try:
             h = yf.Ticker(sym).history(period=yf_period, interval=yf_interval)
@@ -404,12 +420,16 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     if not cat_assets: continue
     
     with st.container(border=True):
+        # ✨ 埋入隱藏的標籤，讓頂部的 CSS 可以辨識這張卡片屬於哪個類別，並塗上對應漸層色
+        st.markdown(f"<span class='cat-{cat_key}'></span>", unsafe_allow_html=True)
+        
         cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
         cat_total_change = sum(a["dayChangeTWD"] for a in cat_assets)
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
-            st.markdown(f"#### 🏷️ {CATEGORY_LABELS[cat_key]}")
+            # 加上圓點點綴標題
+            st.markdown(f"#### <span style='color:{CATEGORY_COLORS[cat_key]};'>●</span> {CATEGORY_LABELS[cat_key]}", unsafe_allow_html=True)
         with ch_2: 
             st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
         
