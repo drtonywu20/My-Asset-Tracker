@@ -325,9 +325,9 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             price_str = format_currency_foreign(a["currentPrice"], a["currency"])
             
         tbl_data.append({
-            "Asset": f"**{a['symbol'].split('.')[0]}**<br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>",
+            "Asset": f"<b>{a['symbol'].split('.')[0]}</b><br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>",
             "Holdings": f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'),
-            "Price": price_str, "Day Change": change_str, "Total Value": f"**{format_currency_twd(a['totalValueTWD'])}**"
+            "Price": price_str, "Day Change": change_str, "Total Value": f"<b>{format_currency_twd(a['totalValueTWD'])}</b>"
         })
         
     st.write(pd.DataFrame(tbl_data).to_html(escape=False, index=False, justify="left", classes="stTable"), unsafe_allow_html=True)
