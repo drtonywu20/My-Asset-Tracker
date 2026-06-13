@@ -71,7 +71,10 @@ st.markdown("""
         background-color: transparent !important;
     }
     
-    div[data-testid="stVerticalBlock"]:has(> div > .card-marker) {
+    /* 卡片容器：card-marker 是該 stVerticalBlock 的「直接子元素 stElementContainer」內的後代，
+       且該 stVerticalBlock 的第一個直接子元素本身就是含有 card-marker 的 stElementContainer
+       （而不是 stLayoutWrapper 包著的更深層卡片）。用 :first-child 排除外層 wrapper。 */
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:first-child .card-marker) {
         background-color: #1C1C1E !important;
         border: 1px solid #2C2C2E !important;
         border-radius: 18px !important;
@@ -79,15 +82,6 @@ st.markdown("""
         padding: 1.5rem !important;
         margin-bottom: 1.5rem !important;
         transition: border-color 0.2s ease;
-    }
-    
-    /* 外層容器（整個 Ledger 區塊的 wrapper）強制透明，避免疊加灰底 */
-    div[data-testid="stVerticalBlock"]:has(div > .card-marker):not(:has(> div > .card-marker)) {
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        margin-bottom: 0 !important;
     }
     
     .card-marker { display: none; }
