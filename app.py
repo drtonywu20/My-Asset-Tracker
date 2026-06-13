@@ -27,8 +27,10 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. App 完美純黑背景 */
-    .stApp, [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
+    /* 1. App 純黑背景 */
+    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { 
+        background-color: #000000 !important; 
+    }
     [data-testid="stHeader"] { background-color: transparent !important; }
     
     /* 2. Apple 字體 */
@@ -37,24 +39,33 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
     div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
     
-    /* 3. ✨ 核心視覺：提高亮度的太空灰卡片，保證絕對可見！ */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #262629 !important; /* 亮度提高的深灰色，絕對不再是一坨黑 */
-        border: 1px solid #48484A !important; /* 更明顯的邊框線條 */
-        border-radius: 20px !important;
-        padding: 1.5rem !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
+    /* 3. ✨ 核心修正：針對 st.container(border=True) 的卡片背景 */
+    /* 新版 Streamlit 會把 border 樣式放在 stVerticalBlock 本身，並用 has() 判斷 */
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stVerticalBlockBorderWrapper"]) {
+        gap: 1rem;
     }
     
-    /* 挖空所有內部排版圖層，保證深灰色透出來 (避免誤傷按鈕或輸入框) */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stVerticalBlock"]) {
+        background-color: #1C1C1E !important;
+        border: 1px solid #38383A !important;
+        border-radius: 20px !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+    }
+    
+    /* 直接針對 wrapper 內部第一層 block 也上色，避免被內層透明覆蓋掉 */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        background-color: #1C1C1E !important;
+        border-radius: 20px !important;
+    }
+    
     div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {
-        background-color: transparent !important; 
+        background-color: transparent !important;
+        padding: 1.5rem !important;
     }
     
     /* 彈出選單背景 */
     [data-testid="stPopoverBody"] {
-        background-color: #262629 !important;
+        background-color: #2C2C2E !important;
         border: 1px solid #48484A !important;
         border-radius: 16px !important;
         box-shadow: 0 20px 40px rgba(0,0,0,0.8) !important;
@@ -70,11 +81,10 @@ st.markdown("""
     }
     
     /* 5. 表格線條 */
-    .row-divider { border-bottom: 1px solid #48484A; margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    .row-divider { border-bottom: 1px solid #2C2C2E; margin-top: 0.75rem; margin-bottom: 0.75rem; }
     .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
-
 # Path to local database
 DB_FILE = "assets.json"
 
