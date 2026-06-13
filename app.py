@@ -27,9 +27,10 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. 整體網頁背景：極致純黑，產生最強烈的對比 */
+    /* 1. ✨ 終極修正：強制整個視窗背景變為純黑，覆蓋 Streamlit 預設的深灰色 */
+    [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
+    [data-testid="stHeader"] { background-color: #000000 !important; }
     .stApp { background-color: #000000 !important; }
-    header[data-testid="stHeader"] { background-color: #000000 !important; }
     
     /* 2. 標題與指標字體 */
     .main-title { font-family: 'Inter', sans-serif; font-weight: 700; color: #E2E9EF; }
@@ -37,32 +38,33 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #94A3B8 !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     
-    /* 3. ✨ 核心修正：統一的深藍色卡片設計 (確保顏色明顯跳出) */
+    /* 3. ✨ 核心視覺：統一的高質感深藍色資產卡片 (從純黑背景跳出來) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #121F33 !important; /* 明顯的高質感深海藍 */
-        border: 1px solid #2A3B57 !important; /* 柔和的藍色邊框 */
+        background-color: #0B1A30 !important; /* 鮮明的深海藍 */
+        border: 1px solid #1C3358 !important; /* 亮色藍邊框增加立體感 */
         border-radius: 16px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important; /* 強烈的卡片浮出感 */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important; /* 強化浮出效果 */
     }
     
-    /* ✨ 強制清除容器內部所有的背景覆蓋，確保深藍色 100% 顯色 */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div,
-    div[data-testid="stVerticalBlockBorderWrapper"] > div > div {
+    /* ✨ 破甲：強制清除 Streamlit 預設在容器內層偷加的背景色，讓深藍色可以 100% 顯色 */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div {
+        background-color: transparent !important;
+    }
+    div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
         background-color: transparent !important;
     }
     
-    /* 其他次要元素背景 (如彈出選單) */
-    .css-1r6g72q, .stCollapse { 
-        border: 1px solid #2A3B57 !important; 
-        background-color: #121F33 !important; 
-        border-radius: 12px; 
-        padding: 1rem; 
+    /* 彈出選單背景同步改為深藍色 */
+    [data-testid="stPopoverBody"] {
+        background-color: #0B1A30 !important;
+        border: 1px solid #1C3358 !important;
+        border-radius: 12px;
     }
     
-    /* 4. 表格內的線條與表頭 */
-    .row-divider { border-bottom: 1px solid #2A3B57; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .table-header { color: #8BA1C0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    /* 4. 表格內的線條與表頭：配合深藍色調整 */
+    .row-divider { border-bottom: 1px solid #1C3358; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .table-header { color: #7890B0; font-size: 0.85rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
