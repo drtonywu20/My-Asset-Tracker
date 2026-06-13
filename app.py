@@ -27,9 +27,9 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. 整體網頁背景：極致黑 (用來對比卡片的深藍色) */
-    .stApp { background-color: #0A0A0A; color: #F1F5F9; }
-    header[data-testid="stHeader"] { background-color: #0A0A0A; }
+    /* 1. 整體網頁背景：極致深色，讓深藍色卡片能「跳」出來 */
+    .stApp { background-color: #07090E; color: #F1F5F9; }
+    header[data-testid="stHeader"] { background-color: #07090E; }
     
     /* 2. 標題與指標字體 */
     .main-title { font-family: 'Inter', sans-serif; font-weight: 700; color: #E2E9EF; }
@@ -37,13 +37,13 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #94A3B8 !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     
-    /* 3. ✨ 核心修正：讓所有「外框容器」強制變成質感深藍色卡片，徹底消滅死黑與白框！ */
+    /* 3. ✨ 核心修正：統一的深藍色卡片設計 */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #111827 !important; /* 明顯的深藍灰色背景 */
-        border: 1px solid #1E293B !important; /* 柔和的深色同色系邊框，不再刺眼 */
+        background-color: #16243A !important; /* 統一的高質感深藍色背景 */
+        border: 1px solid #2A3B57 !important; /* 柔和的藍色邊框 */
         border-radius: 16px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important; /* 卡片浮出感 */
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important; /* 卡片浮出感 */
     }
     
     /* 強制內部區塊透明，讓深藍色可以完美填滿 */
@@ -53,15 +53,15 @@ st.markdown("""
     
     /* 其他次要元素背景 (如彈出選單) */
     .css-1r6g72q, .stCollapse { 
-        border: 1px solid #1E293B !important; 
-        background-color: #111827 !important; 
+        border: 1px solid #2A3B57 !important; 
+        background-color: #16243A !important; 
         border-radius: 12px; 
         padding: 1rem; 
     }
     
     /* 4. 表格內的線條與表頭，配色與深藍色卡片融為一體 */
-    .row-divider { border-bottom: 1px solid #1E293B; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .table-header { color: #64748B; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    .row-divider { border-bottom: 1px solid #2A3B57; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .table-header { color: #8BA1C0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -439,10 +439,10 @@ with col_left:
         fig_area.update_layout(
             margin=dict(l=20, r=20, t=10, b=10), 
             height=280, 
-            paper_bgcolor="#0B0E14", 
+            paper_bgcolor="rgba(0,0,0,0)", 
             plot_bgcolor="rgba(0,0,0,0)", 
             xaxis=dict(showgrid=False, tickfont=dict(color="#A0AEC0", size=10)), 
-            yaxis=dict(showgrid=True, gridcolor="#1E293B", tickfont=dict(color="#A0AEC0", size=10), tickprefix="NT$ ")
+            yaxis=dict(showgrid=True, gridcolor="#2A3B57", tickfont=dict(color="#A0AEC0", size=10), tickprefix="NT$ ")
         )
         st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
     else: st.info("Loading performance timeline...")
@@ -469,10 +469,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     if not raw_cat_assets: continue
     
     with st.container(border=True):
-        # ✨ 解決方案：直接用 HTML 繪製分類的專屬發光顏色條，不依賴容易失效的 CSS
-        st.markdown(f"""
-            <div style="height: 4px; background-color: {CATEGORY_COLORS[cat_key]}; border-radius: 4px; margin-top: -0.5rem; margin-bottom: 1rem; box-shadow: 0 2px 10px {CATEGORY_COLORS[cat_key]}80;"></div>
-        """, unsafe_allow_html=True)
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
@@ -589,7 +585,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(cols_ratio)
             
             multi_tag = f" <span style='font-size:0.65rem; background:#1E293B; padding:2px 4px; border-radius:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
-            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
+            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#8BA1C0;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
             c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
             c3.markdown(cost_str)
             c4.markdown(price_str)
