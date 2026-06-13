@@ -27,29 +27,49 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. App 純黑背景 */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { 
+    /* 1. App 純黑背景：覆蓋所有 Streamlit 預設深灰底層容器 */
+    .stApp, 
+    [data-testid="stAppViewContainer"], 
+    [data-testid="stMain"],
+    [data-testid="stMainBlockContainer"],
+    [data-testid="stAppViewBlockContainer"],
+    section.main { 
         background-color: #000000 !important; 
+        background: #000000 !important;
     }
     [data-testid="stHeader"] { background-color: transparent !important; }
     
-    /* 2. Apple 字體 */
-    .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em;}
+    /* 2. Apple 字體與排版 */
+    html, body, .stApp, [data-testid="stAppViewContainer"] {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
+    }
+    .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em; font-size: 2.4rem; margin-bottom: 0.2rem; }
     .highlight-title { color: #0A84FF; font-weight: bold; } 
     div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
     div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
     
-    /* 3. ✨ 核心修正：用「標記元素」精準鎖定卡片容器。
+    /* Apple 風格的次要文字顏色 */
+    p, .stMarkdown, [data-testid="stMarkdownContainer"] p {
+        color: #F2F2F7;
+    }
+    h3, h4, .stSubheader, [data-testid="stHeadingWithActionElements"] h4 {
+        color: #FFFFFF !important;
+        font-weight: 600 !important;
+        letter-spacing: -0.01em;
+    }
+    
+    /* 3. ✨ 卡片容器：用「標記元素」精準鎖定每個資產分類區塊。
        每個 st.container(border=True) 內部會插入一個隱藏的 .card-marker，
        CSS 透過 :has() 找到「直接包含 .card-marker 的 stVerticalBlock」來上色，
-       不會誤判頁面根容器或其他區塊。 */
+       不會誤判頁面根容器或其他區塊。每個卡片各自為獨立色塊，浮在純黑背景上。 */
     div[data-testid="stVerticalBlock"]:has(> div .card-marker) {
         background-color: #1C1C1E !important;
-        border: 1px solid #38383A !important;
-        border-radius: 20px !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+        border: 1px solid #2C2C2E !important;
+        border-radius: 18px !important;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
         padding: 1.5rem !important;
         margin-bottom: 1.5rem !important;
+        transition: border-color 0.2s ease;
     }
     
     .card-marker { display: none; }
@@ -63,6 +83,28 @@ st.markdown("""
     }
     [data-testid="stPopoverBody"] > div {
         background-color: transparent !important;
+    }
+    
+    /* Apple 風格按鈕：圓潤、低對比、平滑過渡 */
+    [data-testid="stButton"] button, [data-testid="stPopoverButton"] {
+        border-radius: 12px !important;
+        font-weight: 600 !important;
+        transition: all 0.15s ease !important;
+        border: 1px solid #38383A !important;
+    }
+    [data-testid="stButton"] button:hover, [data-testid="stPopoverButton"]:hover {
+        border-color: #0A84FF !important;
+        background-color: #2C2C2E !important;
+    }
+    
+    /* Segmented control 風格微調 */
+    [data-testid="stSegmentedControl"] label {
+        border-radius: 10px !important;
+    }
+    
+    /* Number input / text input 圓角 */
+    [data-baseweb="input"], [data-baseweb="select"] {
+        border-radius: 10px !important;
     }
     
     /* 4. 圓形頭像 */
