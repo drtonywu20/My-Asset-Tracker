@@ -5,6 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import os
+import requests # ✨ 新增 requests 套件以支援即時搜尋
 from datetime import datetime, timedelta
 
 # ✨ 嘗試匯入 Firebase (防呆：若伺服器還沒安裝也不會崩潰)
@@ -75,7 +76,6 @@ st.markdown("""
 # Path to local database
 DB_FILE = "assets.json"
 
-# ✨ 加入獨立 ID 與 Account 屬性，並刻意設定兩筆 TSLA 測試合併功能
 DEFAULT_ASSETS = [
     {"id": "00631L_TW", "name": "元大台灣50正2", "symbol": "00631L.TW", "category": "tw_stock", "quantity": 131000.0, "average_cost": 30.0, "account": "Default"},
     {"id": "00981A_TW", "name": "00981A", "symbol": "00981A.TW", "category": "tw_stock", "quantity": 18000.0, "average_cost": 25.0, "account": "Default"},
@@ -318,25 +318,71 @@ with action_c1:
 
 with action_c2:
     with st.popover("➕ Add Asset", use_container_width=True):
-        st.markdown("**Add New Asset**")
+        st.markdown("**Add New Asset (新增資產)**")
+        
+        # ✨ 第一步：獨立於 Form 之外的動態搜尋框，按 Enter 會觸發重整撈取資料
+        search_kw = st.text_input("🔍 1. Search (輸入代碼或關鍵字後按 Enter)", placeholder="e.g. 2330 或 AAPL")
+        
+        options_dict = {}
+        if search_kw:
+            try:
+                # 串接 Yahoo 官方即時搜尋 API
+                url = f"https://query2.finance.yahoo.com/v1/finance/search?q={search_kw}"
+                headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
+                r = requests.get(url, headers=headers, timeout=5)
+                data = r.json()
+                for q in data.get('quotes', []):
+                    # 過濾掉無關的資訊，只保留股票、ETF或加密貨幣
+                    if 'symbol' in q and q.get('quoteType') in ['EQUITY', 'ETF', 'MUTUALFUND', 'CRYPTOCURRENCY', 'CURRENCY']:
+                        sym = q['symbol']
+                        name = q.get('shortname', q.get('longname', 'Unknown'))
+                        exch = q.get('exchDisp', '')
+                        options_dict[sym] = f"{sym} | {name} ({exch})"
+            except Exception:
+                pass
+        
+        # ✨ 第二步：將找到的標的放入 Form 的選單中讓使用者確認
         with st.form("add_asset_form", clear_on_submit=True):
-            new_name = st.text_input("Asset Name", placeholder="e.g. Taiwan Semiconductor")
-            new_sym = st.text_input("Symbol", placeholder="e.g. 2330.TW or AAPL")
-            new_cat = st.selectbox("Category", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
-            # ✨ 讓使用者可以直接選擇這筆資產存放的券商
-            new_acc = st.selectbox("Broker / Account", options=list(ACCOUNT_LABELS.keys()), format_func=lambda x: ACCOUNT_LABELS[x])
-            new_qty = st.number_input("Holding Quantity", min_value=0.0, step=0.1, value=0.0, format="%.5f")
-            new_cost = st.number_input("Average Cost", min_value=0.0, step=0.1, value=0.0, format="%.5f")
+            if options_dict:
+                # 如果有搜尋結果，直接跳出下拉選單供精確選擇
+                new_sym = st.selectbox("🎯 2. Select Asset (選擇精確標的)", list(options_dict.keys()), format_func=lambda x: options_dict[x])
+            else:
+                # 若無結果或剛打開視窗，保留手動輸入欄位
+                new_sym = st.text_input("🎯 2. Symbol (找不到搜尋結果時可手動輸入)", value=search_kw.upper() if search_kw else "")
+
+            new_cat = st.selectbox("Category (資產分類)", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
+            new_acc = st.selectbox("Broker / Account (券商帳戶)", options=list(ACCOUNT_LABELS.keys()), format_func=lambda x: ACCOUNT_LABELS[x])
+            new_qty = st.number_input("Holding Quantity (持有數量)", min_value=0.0, step=0.1, value=0.0, format="%.5f")
+            new_cost = st.number_input("Average Cost (平均成本)", min_value=0.0, step=0.1, value=0.0, format="%.5f")
             
             if st.form_submit_button("Save to Portfolio", use_container_width=True):
-                if not new_name or not new_sym: 
-                    st.error("Please provide both a Display Name and Symbol.")
+                if not new_sym: 
+                    st.error("請輸入或選擇股票代號 (Symbol)")
                 else:
                     clean_sym = new_sym.strip().upper()
+                    
+                    # ✨ 聰明截取：直接從剛剛的選單萃取公司全名，不用手動打！
+                    fetched_name = clean_sym
+                    if clean_sym in options_dict:
+                        parts = options_dict[clean_sym].split(' | ')
+                        if len(parts) > 1:
+                            fetched_name = parts[1].rsplit(' (', 1)[0]
+                    else:
+                        # 備案：如果使用者硬是手打，嘗試用 yf 補抓
+                        try:
+                            info = yf.Ticker(clean_sym).info
+                            fetched_name = info.get('shortName', info.get('longName', clean_sym))
+                        except Exception:
+                            pass 
+                            
                     st.session_state.assets.append({
                         "id": f"{clean_sym}_{int(datetime.now().timestamp())}",
-                        "name": new_name.strip(), "symbol": clean_sym, "category": new_cat, 
-                        "account": new_acc, "quantity": float(new_qty), "average_cost": float(new_cost)
+                        "name": fetched_name, 
+                        "symbol": clean_sym, 
+                        "category": new_cat, 
+                        "account": new_acc, 
+                        "quantity": float(new_qty), 
+                        "average_cost": float(new_cost)
                     })
                     save_assets(st.session_state.assets)
                     st.cache_data.clear()
@@ -420,76 +466,73 @@ with col_right:
 st.markdown("---")
 st.subheader("📋 Your Asset Ledger")
 
-# ✨ 這裡加入券商專屬的檢視切換器 (US Stocks Filter)
-view_col1, view_col2 = st.columns([2, 5])
-with view_col1:
-    us_broker_view = st.segmented_control(
-        "🇺🇸 US Stocks Filter", 
-        ["Merged", "Cathay", "IB"], 
-        format_func=lambda x: {"Merged": "合併顯示 (All)", "Cathay": "國泰複委託", "IB": "IB海外券商"}[x],
-        default="Merged",
-        label_visibility="collapsed"
-    )
-
 cols_ratio = [2, 1.2, 1.2, 1.2, 2.2, 2.2, 1.4, 0.8]
 
 for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     raw_cat_assets = [a for a in portfolio if a["category"] == cat_key]
-    
-    # 若為美股，依據切換器過濾資料
-    if cat_key == "us_stock":
-        if us_broker_view == "Cathay":
-            raw_cat_assets = [a for a in raw_cat_assets if a.get("account") == "Cathay"]
-        elif us_broker_view == "IB":
-            raw_cat_assets = [a for a in raw_cat_assets if a.get("account") == "IB"]
-            
     if not raw_cat_assets: continue
-    
-    # ✨ 核心：無論是否過濾，一律將相同股票代碼 (symbol) 合併
-    grouped_assets = {}
-    for a in raw_cat_assets:
-        sym = a["symbol"]
-        if sym not in grouped_assets:
-            grouped_assets[sym] = {"symbol": sym, "name": a["name"], "category": a["category"], "currency": a["currency"], "currentPrice": a["currentPrice"], "dayChangePercent": a["dayChangePercent"], "underlying": []}
-        grouped_assets[sym]["underlying"].append(a)
-        
-    cat_assets = []
-    # 進行加權平均與數量加總
-    for sym, grp in grouped_assets.items():
-        tot_qty = sum(u["quantity"] for u in grp["underlying"])
-        if tot_qty <= 0 and grp["category"] != "cash": continue # 防呆：若賣光且不是現金則跳過
-            
-        tot_cost_twd = sum(u["totalCostTWD"] for u in grp["underlying"])
-        tot_val_twd = sum(u["totalValueTWD"] for u in grp["underlying"])
-        tot_day_chg_twd = sum(u["dayChangeTWD"] for u in grp["underlying"])
-        tot_unrealized_twd = sum(u["unrealizedPnlTWD"] for u in grp["underlying"])
-        
-        grp["quantity"] = tot_qty
-        if tot_qty > 0:
-            tot_cost_usd = sum(u["average_cost"] * u["quantity"] for u in grp["underlying"])
-            grp["average_cost"] = tot_cost_usd / tot_qty
-        else:
-            grp["average_cost"] = sum(u["average_cost"] for u in grp["underlying"]) / len(grp["underlying"])
-            
-        grp["totalValueTWD"] = tot_val_twd
-        grp["dayChangeTWD"] = tot_day_chg_twd
-        grp["unrealizedPnlTWD"] = tot_unrealized_twd
-        grp["unrealizedPnlPercent"] = (tot_unrealized_twd / tot_cost_twd * 100) if tot_cost_twd > 0 else 0.0
-        
-        cat_assets.append(grp)
-        
-    cat_assets = sorted(cat_assets, key=lambda x: x["totalValueTWD"], reverse=True)
-    if not cat_assets: continue
     
     with st.container(border=True):
         st.markdown(f"<span class='cat-{cat_key}'></span>", unsafe_allow_html=True)
         
-        cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
-        cat_total_change = sum(a["dayChangeTWD"] for a in cat_assets)
-        
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
             st.markdown(f"#### <span style='color:{CATEGORY_COLORS[cat_key]};'>●</span> {CATEGORY_LABELS[cat_key]}", unsafe_allow_html=True)
+            if cat_key == "us_stock":
+                us_broker_view = st.segmented_control(
+                    "🇺🇸 US Stocks Filter", 
+                    ["Merged", "Cathay", "IB"], 
+                    format_func=lambda x: {"Merged": "合併顯示 (All)", "Cathay": "國泰複委託", "IB": "IB海外券商"}[x],
+                    default="Merged",
+                    label_visibility="collapsed"
+                )
+                st.write("") 
+                
+                if us_broker_view == "Cathay":
+                    raw_cat_assets = [a for a in raw_cat_assets if a.get("account") == "Cathay"]
+                elif us_broker_view == "IB":
+                    raw_cat_assets = [a for a in raw_cat_assets if a.get("account") == "IB"]
+        
+        grouped_assets = {}
+        for a in raw_cat_assets:
+            sym = a["symbol"]
+            if sym not in grouped_assets:
+                grouped_assets[sym] = {"symbol": sym, "name": a["name"], "category": a["category"], "currency": a["currency"], "currentPrice": a["currentPrice"], "dayChangePercent": a["dayChangePercent"], "underlying": []}
+            grouped_assets[sym]["underlying"].append(a)
+            
+        cat_assets = []
+        for sym, grp in grouped_assets.items():
+            tot_qty = sum(u["quantity"] for u in grp["underlying"])
+            if tot_qty <= 0 and grp["category"] != "cash": continue 
+                
+            tot_cost_twd = sum(u["totalCostTWD"] for u in grp["underlying"])
+            tot_val_twd = sum(u["totalValueTWD"] for u in grp["underlying"])
+            tot_day_chg_twd = sum(u["dayChangeTWD"] for u in grp["underlying"])
+            tot_unrealized_twd = sum(u["unrealizedPnlTWD"] for u in grp["underlying"])
+            
+            grp["quantity"] = tot_qty
+            if tot_qty > 0:
+                tot_cost_usd = sum(u["average_cost"] * u["quantity"] for u in grp["underlying"])
+                grp["average_cost"] = tot_cost_usd / tot_qty
+            else:
+                grp["average_cost"] = sum(u["average_cost"] for u in grp["underlying"]) / len(grp["underlying"])
+                
+            grp["totalValueTWD"] = tot_val_twd
+            grp["dayChangeTWD"] = tot_day_chg_twd
+            grp["unrealizedPnlTWD"] = tot_unrealized_twd
+            grp["unrealizedPnlPercent"] = (tot_unrealized_twd / tot_cost_twd * 100) if tot_cost_twd > 0 else 0.0
+            
+            cat_assets.append(grp)
+            
+        cat_assets = sorted(cat_assets, key=lambda x: x["totalValueTWD"], reverse=True)
+        
+        if not cat_assets:
+            st.info("此帳戶檢視模式下目前無持有資產。")
+            continue
+            
+        cat_total_val = sum(a["totalValueTWD"] for a in cat_assets)
+        cat_total_change = sum(a["dayChangeTWD"] for a in cat_assets)
+
         with ch_2: 
             st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
         
@@ -521,7 +564,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                 
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(cols_ratio)
             
-            # 若為合併顯示且有多筆底層帳戶，給予小標記提示
             multi_tag = f" <span style='font-size:0.65rem; background:#1E293B; padding:2px 4px; border-radius:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
             c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#64748B;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
             c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
@@ -534,7 +576,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             with c8:
                 with st.popover("⚙️"):
                     st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
-                    # ✨ 展開底下所有帳戶，允許獨立編輯
                     for i, u in enumerate(a["underlying"]):
                         acc_label = ACCOUNT_LABELS.get(u.get("account", "Default"), "預設 (Default)")
                         st.caption(f"Broker: {acc_label}")
