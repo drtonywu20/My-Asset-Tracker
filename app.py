@@ -152,8 +152,8 @@ def fetch_realtime_market_data(assets_list):
     exchange_rate = 32.5
     
     try:
-        # 延長抓取天數為 7 天，確保遇到連假時不會漏接
-        fx_hist = yf.Ticker("USDTWD=X").history(period="7d", interval="1d")
+        # 延長抓取天數為 1mo，徹底解決 yfinance 的時區截斷 bug
+        fx_hist = yf.Ticker("USDTWD=X").history(period="1mo", interval="1d")
         if not fx_hist.empty:
             exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
     except: pass
@@ -164,23 +164,42 @@ def fetch_realtime_market_data(assets_list):
         if sym in quote_data: continue
             
         try:
-            hist = yf.Ticker(sym).history(period="7d", interval="1d")
+            ticker = yf.Ticker(sym)
+            
+            # ✨ 核心修正 1：優先使用 fast_info 獲取最即時且不受 K 線假數據干擾的報價
+            try:
+                fi = ticker.fast_info
+                # 確保數值存在
+                if fi.last_price is not None and fi.previous_close is not None:
+                    # 針對假日的防呆，last_price 在休市或收盤後就是準確的最後收盤價
+                    quote_data[sym] = {
+                        "price": float(fi.last_price), 
+                        "prev_close": float(fi.previous_close)
+                    }
+                    continue # 成功抓到就跳過歷史 K 線的運算
+            except Exception:
+                pass
+            
+            # ✨ 核心修正 2：如果 fast_info 失敗，退回使用強化版的 K 線清洗演算法
+            hist = ticker.history(period="1mo", interval="1d")
             hist = hist.dropna(subset=['Close'])
             if hist.empty: continue
             
-            # 核心修復 1：拔除時區並合併重複日期，確保時間軸絕對乾淨
             hist.index = pd.to_datetime(hist.index, utc=True).tz_convert(None).normalize()
             hist = hist[~hist.index.duplicated(keep='last')].sort_index()
             
-            # 核心修復 2：剔除 Yahoo 在週末/假日偷塞的「0 交易量」假數據 (加密貨幣除外)
-            if asset["category"] != "crypto" and 'Volume' in hist.columns:
-                hist_valid = hist[hist['Volume'] != 0]
-                if not hist_valid.empty:
-                    hist = hist_valid
+            if asset["category"] != "crypto":
+                # 剔除六日的假數據 (針對臺股與美股週末沒開盤的情境)
+                hist = hist[hist.index.dayofweek < 5]
+                if 'Volume' in hist.columns:
+                    valid_vols = hist['Volume'] > 0
+                    if len(valid_vols) > 0:
+                        valid_vols.iloc[-1] = True # 保留最後一天防剛開盤無交易量
+                        hist = hist[valid_vols]
                     
-            price = hist['Close'].iloc[-1]
-            prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else price
-            quote_data[sym] = {"price": float(price), "prev_close": float(prev_close)}
+            price = float(hist['Close'].iloc[-1])
+            prev_close = float(hist['Close'].iloc[-2]) if len(hist) > 1 else price
+            quote_data[sym] = {"price": price, "prev_close": prev_close}
         except Exception:
             pass
             
@@ -245,7 +264,7 @@ def fetch_historical_performance(assets_list, period="1mo"):
             if h.empty: continue
             h.index = pd.to_datetime(h.index, utc=True).tz_convert(None).normalize()
             h = h[['Close']].rename(columns={'Close': sym})
-            h = h[~h.index.duplicated(keep='last')]
+            h = h[~h.index.duplicated(keep='last')].sort_index()
             chart_data_frames.append(h)
         except: pass
         
