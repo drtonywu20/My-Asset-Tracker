@@ -32,6 +32,7 @@ st.markdown("""
     html, body,
     .stApp, .stApp,
     [data-testid="stAppViewContainer"][data-testid="stAppViewContainer"], 
+    [data-testid="stAppViewContainer"] > div,
     section[data-testid="stMain"][data-testid="stMain"],
     [data-testid="stMainBlockContainer"][data-testid="stMainBlockContainer"],
     [data-testid="stAppViewBlockContainer"][data-testid="stAppViewBlockContainer"],
