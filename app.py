@@ -38,32 +38,35 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #94A3B8 !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     
-    /* 3. ✨ 核心視覺：統一的高質感深藍色資產卡片 (從純黑背景跳出來) */
+    /* 3. ✨ 核心視覺：讓卡片徹底跳出來的「深海軍藍」 */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #0A192F !important; /* 鮮明的高質感深海藍 */
-        border: 1px solid #1C3358 !important; /* 亮色藍邊框增加立體感 */
+        background-color: #152B4D !important; /* 顯眼且具質感的海軍藍 */
+        border: 1px solid #2B4E85 !important; /* 亮色藍邊框增加立體感 */
         border-radius: 16px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important; /* 強化浮出效果 */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important; /* 強烈立體陰影 */
     }
     
-    /* ✨ 終極破甲：把 Streamlit 偷偷藏在裡面的所有隱藏排版圖層，全部強制染成深藍色！ 
-       這樣深藍色就不會再被「死黑圖層」蓋住了 */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    /* ✨ 核彈級破甲：把 Streamlit 偷偷藏在裡面的所有排版圖層，全部強制染成一模一樣的海軍藍！ 
+       絕對不讓系統偷偷塞純黑色進來 */
+    div[data-testid="stVerticalBlockBorderWrapper"] div,
     div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
-        background-color: #0A192F !important; 
+        background-color: #152B4D !important; 
     }
     
-    /* 彈出選單背景同步改為稍微亮一點的深藍色，產生層次 */
+    /* 彈出選單背景同步改為海軍藍 */
     [data-testid="stPopoverBody"] {
-        background-color: #112240 !important;
-        border: 1px solid #1C3358 !important;
+        background-color: #152B4D !important;
+        border: 1px solid #2B4E85 !important;
         border-radius: 12px;
     }
+    [data-testid="stPopoverBody"] div {
+        background-color: #152B4D !important;
+    }
     
-    /* 4. 表格內的線條與表頭：配合深藍色調整 */
-    .row-divider { border-bottom: 1px solid #1C3358; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .table-header { color: #7890B0; font-size: 0.85rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    /* 4. 表格內的線條與表頭：配合藍色調整 */
+    .row-divider { border-bottom: 1px solid #2B4E85; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .table-header { color: #8BA1C0; font-size: 0.85rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
