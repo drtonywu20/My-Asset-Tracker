@@ -62,18 +62,11 @@ st.markdown("""
         letter-spacing: -0.01em;
     }
     
-    /* 3. ✨ 卡片容器：用「標記元素」精準鎖定每個資產分類區塊。
-       每個 st.container(border=True) 內部會插入一個隱藏的 .card-marker，
-       CSS 透過 :has() 找到「直接包含 .card-marker 的 stVerticalBlock」來上色，
-       不會誤判頁面根容器或其他區塊。每個卡片各自為獨立色塊，浮在純黑背景上。 */
-    /* 確保所有 stVerticalBlock 預設透明，只有標記為卡片的才有背景色 */
+    /* 3. ✨ 卡片容器：用「標記元素」精準鎖定每個資產分類區塊。 */
     div[data-testid="stVerticalBlock"] {
         background-color: transparent !important;
     }
     
-    /* 卡片容器：card-marker 是該 stVerticalBlock 的「直接子元素 stElementContainer」內的後代，
-       且該 stVerticalBlock 的第一個直接子元素本身就是含有 card-marker 的 stElementContainer
-       （而不是 stLayoutWrapper 包著的更深層卡片）。用 :first-child 排除外層 wrapper。 */
     div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:first-child .card-marker) {
         background-color: #1C1C1E !important;
         border: 1px solid #2C2C2E !important;
@@ -233,12 +226,11 @@ def fetch_realtime_market_data(assets_list):
         try:
             ticker = yf.Ticker(sym)
             
-            # ✨ 核心修正 1：優先使用 fast_info 獲取最即時且不受 K 線假數據干擾的報價
+            # 優先使用 fast_info 獲取最即時且不受 K 線假數據干擾的報價
             try:
                 fi = ticker.fast_info
                 # 確保數值存在
                 if fi.last_price is not None and fi.previous_close is not None:
-                    # 針對假日的防呆，last_price 在休市或收盤後就是準確的最後收盤價
                     quote_data[sym] = {
                         "price": float(fi.last_price), 
                         "prev_close": float(fi.previous_close)
@@ -247,7 +239,7 @@ def fetch_realtime_market_data(assets_list):
             except Exception:
                 pass
             
-            # ✨ 核心修正 2：如果 fast_info 失敗，退回使用強化版的 K 線清洗演算法
+            # 如果 fast_info 失敗，退回使用強化版的 K 線清洗演算法
             hist = ticker.history(period="1mo", interval="1d")
             hist = hist.dropna(subset=['Close'])
             if hist.empty: continue
@@ -256,12 +248,11 @@ def fetch_realtime_market_data(assets_list):
             hist = hist[~hist.index.duplicated(keep='last')].sort_index()
             
             if asset["category"] != "crypto":
-                # 剔除六日的假數據 (針對臺股與美股週末沒開盤的情境)
                 hist = hist[hist.index.dayofweek < 5]
                 if 'Volume' in hist.columns:
                     valid_vols = hist['Volume'] > 0
                     if len(valid_vols) > 0:
-                        valid_vols.iloc[-1] = True # 保留最後一天防剛開盤無交易量
+                        valid_vols.iloc[-1] = True 
                         hist = hist[valid_vols]
                     
             price = float(hist['Close'].iloc[-1])
@@ -394,11 +385,46 @@ with st.sidebar:
         st.warning("🟡 Local Storage Mode")
         st.caption("Cloud database not connected yet. Data will reset if Streamlit hibernates.")
 
+# ✨ 調整排版：先抓取與計算數據，讓頂部的「總資產」能第一時間獲取數值
+with st.spinner("Fetching active markets and calculating TWD values..."):
+    exchange_rate, portfolio = fetch_realtime_market_data(st.session_state.assets)
+
+# --- 核心計算 ---
+total_net_worth = sum(a["totalValueTWD"] for a in portfolio)
+total_day_change = sum(a["dayChangeTWD"] for a in portfolio)
+prior_net_worth = total_net_worth - total_day_change
+percent_change = (total_day_change / prior_net_worth * 100) if prior_net_worth > 0 else 0.0
+
+total_unrealized_pnl = sum(a["unrealizedPnlTWD"] for a in portfolio if a["category"] != "cash")
+total_cost_basis = sum(a["totalCostTWD"] for a in portfolio if a["category"] != "cash")
+total_unrealized_percent = (total_unrealized_pnl / total_cost_basis * 100) if total_cost_basis > 0 else 0.0
+
+cash_total = sum(a["totalValueTWD"] for a in portfolio if a["category"] == "cash")
+
 # ----------------- Header & Global Actions -----------------
 
-st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
-st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
+# ✨ Apple Hero Section 排版：左邊大標題、右邊超大總資產
+header_left, header_right = st.columns([1.2, 1])
 
+with header_left:
+    st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
+    st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
+
+with header_right:
+    ds = "+" if total_day_change >= 0 else ""
+    color = "#30D158" if total_day_change >= 0 else "#FF453A"
+    
+    st.markdown(f"""
+    <div style='text-align: right; padding-top: 0.5rem;'>
+        <div style='color: #8E8E93; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Total Net Worth</div>
+        <div style='color: #FFFFFF; font-size: 3.2rem; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: -0.02em; line-height: 1;'>{format_currency_twd(total_net_worth)}</div>
+        <div style='color: {color}; font-size: 1.1rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, monospace; margin-top: 8px;'>
+            {ds}{format_currency_twd(total_day_change)} ({ds}{percent_change:.2f}%) Today
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
+
+st.write("") # 增加一點呼吸空間
 action_c1, action_c2, action_c3 = st.columns([1.5, 1.5, 7])
 
 with action_c1:
@@ -473,33 +499,24 @@ with action_c2:
 
 st.markdown("---")
 
-with st.spinner("Fetching active markets and calculating TWD values..."):
-    exchange_rate, portfolio = fetch_realtime_market_data(st.session_state.assets)
-
 # ----------------- Dashboard Layout -----------------
 
-total_net_worth = sum(a["totalValueTWD"] for a in portfolio)
-total_day_change = sum(a["dayChangeTWD"] for a in portfolio)
-prior_net_worth = total_net_worth - total_day_change
-percent_change = (total_day_change / prior_net_worth * 100) if prior_net_worth > 0 else 0.0
+# ✨ 因為總資產移到了上面，現在卡片區縮減為完美平衡的 3 格！
+m1, m2, m3 = st.columns([1, 1, 1])
 
-total_unrealized_pnl = sum(a["unrealizedPnlTWD"] for a in portfolio if a["category"] != "cash")
-total_cost_basis = sum(a["totalCostTWD"] for a in portfolio if a["category"] != "cash")
-total_unrealized_percent = (total_unrealized_pnl / total_cost_basis * 100) if total_cost_basis > 0 else 0.0
-
-cash_total = sum(a["totalValueTWD"] for a in portfolio if a["category"] == "cash")
-
-m1, m2, m3, m4 = st.columns([1.5, 1.5, 1, 1])
 with m1:
-    ds = "+" if total_day_change >= 0 else ""
-    st.metric("Total Net Worth", format_currency_twd(total_net_worth), f"{ds}{percent_change:.2f}% (Day: {ds}{format_currency_twd(total_day_change)})")
-with m2:
-    us = "+" if total_unrealized_pnl >= 0 else ""
-    st.metric("Total Unrealized P/L", f"{us}{format_currency_twd(total_unrealized_pnl)}", f"{us}{total_unrealized_percent:.2f}% (All-Time)", delta_color="normal")
+    with st.container(border=True):
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        us = "+" if total_unrealized_pnl >= 0 else ""
+        st.metric("Total Unrealized P/L", f"{us}{format_currency_twd(total_unrealized_pnl)}", f"{us}{total_unrealized_percent:.2f}% (All-Time)", delta_color="normal")
+with m2: 
+    with st.container(border=True):
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.metric("Cash Liquidity", format_currency_twd(cash_total), f"{(cash_total/total_net_worth*100) if total_net_worth>0 else 0:.1f}% of portfolio", delta_color="off")
 with m3: 
-    st.metric("Cash Liquidity", format_currency_twd(cash_total), f"{(cash_total/total_net_worth*100) if total_net_worth>0 else 0:.1f}% of portfolio", delta_color="off")
-with m4: 
-    st.metric("USDTWD Rate", f"NT$ {exchange_rate:.2f}", "Live Yahoo Query")
+    with st.container(border=True):
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.metric("USDTWD Rate", f"NT$ {exchange_rate:.2f}", "Live Yahoo Query")
 
 col_left, col_right = st.columns([3, 2])
 
@@ -545,10 +562,8 @@ with col_right:
         if not df_alloc.empty:
             fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
             
-            # ✨ 優化 1：調整文字大小與顏色，增添 Apple 質感避免擁擠
             fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color="#E2E9EF"), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
             
-            # ✨ 優化 2：高度從 240 提升至 320 來對齊左側卡片，並加大 margin 避免外圍文字被裁切
             fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
         else: st.info("No asset holdings.")
