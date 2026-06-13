@@ -27,46 +27,60 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. ✨ 終極修正：強制整個視窗背景變為純黑，覆蓋 Streamlit 預設的深灰色 */
-    [data-testid="stAppViewContainer"], [data-testid="stHeader"], .stApp { 
+    /* 1. ✨ 終極核彈級修正：提升 CSS 權重 (Specificity)，絕對貫穿 Streamlit 與瀏覽器快取的防護罩 */
+    html body [data-testid="stAppViewContainer"], 
+    html body [data-testid="stHeader"], 
+    html body .stApp { 
         background-color: #000000 !important; 
     }
     
-    /* 2. 標題與指標字體 */
-    .main-title { font-family: 'Inter', sans-serif; font-weight: 700; color: #E2E9EF; }
-    .highlight-title { color: #E2E9F4; font-weight: bold; }
-    div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
-    div[data-testid="stMetricLabel"] { color: #94A3B8 !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
+    /* 2. Apple 原生字體 */
+    html body .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em;}
+    html body .highlight-title { color: #0A84FF; font-weight: bold; } 
+    html body div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
+    html body div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
     
-    /* 3. ✨ 核心視覺：讓卡片徹底跳出來的「深海軍藍」 */
-    div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #152B4D !important; /* 顯眼且具質感的海軍藍 */
-        border: 1px solid #2B4E85 !important; /* 亮色藍邊框增加立體感 */
-        border-radius: 16px !important;
+    /* 3. ✨ 核心視覺：強制太空灰卡片顯色 */
+    /* 加上 html body div.stApp 來產生最高層級的 CSS 權重，強壓系統預設值 */
+    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #1C1C1E !important; 
+        background: #1C1C1E !important;
+        border: 1px solid #333336 !important; 
+        border-radius: 20px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important; /* 強烈立體陰影 */
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
     }
     
-    /* ✨ 核彈級破甲：把 Streamlit 偷偷藏在裡面的所有排版圖層，全部強制染成一模一樣的海軍藍！ 
-       絕對不讓系統偷偷塞純黑色進來 */
-    div[data-testid="stVerticalBlockBorderWrapper"] div,
-    div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
-        background-color: #152B4D !important; 
+    /* ✨ 徹底溶解內層死黑：將卡片內部的所有排版容器，全部強制打回透明！ */
+    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] > div,
+    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"],
+    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] [data-testid="column"] {
+        background-color: transparent !important; 
+        background: transparent !important;
     }
     
-    /* 彈出選單背景同步改為海軍藍 */
-    [data-testid="stPopoverBody"] {
-        background-color: #152B4D !important;
-        border: 1px solid #2B4E85 !important;
-        border-radius: 12px;
+    /* 彈出選單背景 */
+    html body [data-testid="stPopoverBody"] {
+        background-color: #1C1C1E !important;
+        background: #1C1C1E !important;
+        border: 1px solid #333336 !important;
+        border-radius: 16px !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6) !important;
     }
-    [data-testid="stPopoverBody"] div {
-        background-color: #152B4D !important;
+    html body [data-testid="stPopoverBody"] > div {
+        background-color: transparent !important;
+        background: transparent !important;
     }
     
-    /* 4. 表格內的線條與表頭：配合藍色調整 */
-    .row-divider { border-bottom: 1px solid #2B4E85; margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .table-header { color: #8BA1C0; font-size: 0.85rem; text-transform: uppercase; font-weight: bold; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    /* 4. 圓形頭像 */
+    html body [data-testid="stImage"] img {
+        border-radius: 50% !important;
+        object-fit: cover;
+    }
+    
+    /* 5. 表格線條 */
+    html body .row-divider { border-bottom: 1px solid #333336; margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    html body .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -89,7 +103,8 @@ DEFAULT_ASSETS = [
 ]
 
 CATEGORY_LABELS = {"tw_stock": "Taiwan Stocks", "us_stock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash & Equivalents"}
-CATEGORY_COLORS = {"tw_stock": "#3B82F6", "us_stock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}
+# ✨ Apple 系統重點色系
+CATEGORY_COLORS = {"tw_stock": "#0A84FF", "us_stock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}
 
 ACCOUNT_LABELS = {
     "Default": "國泰證券戶",
@@ -323,6 +338,8 @@ if "assets" not in st.session_state: st.session_state.assets = load_assets()
 
 # --- Sidebar Connection Status ---
 with st.sidebar:
+    # ✨ 這裡把圖片放大了，而且上方的 CSS 會自動把它變成完美圓形！
+    st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=200&q=80", width=100)
     st.markdown("### System Status")
     if get_db():
         st.success("🟢 Firebase Cloud Sync: Active")
@@ -455,7 +472,8 @@ with col_left:
             x=df_hist["date"], 
             y=df_hist[selected_class], 
             mode="lines", 
-            line=dict(color={"total": "#6366f1", "twStock": "#3B82F6", "usStock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}.get(selected_class, "#6366f1"), width=3), 
+            # ✨ 折線圖顏色與 Apple 標籤色同步
+            line=dict(color={"total": "#0A84FF", "twStock": "#0A84FF", "usStock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}.get(selected_class, "#0A84FF"), width=3), 
             name=selected_class, 
             hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
         ))
@@ -465,8 +483,8 @@ with col_left:
             height=280, 
             paper_bgcolor="rgba(0,0,0,0)", 
             plot_bgcolor="rgba(0,0,0,0)", 
-            xaxis=dict(showgrid=False, tickfont=dict(color="#A0AEC0", size=10)), 
-            yaxis=dict(showgrid=True, gridcolor="#2A3B57", tickfont=dict(color="#A0AEC0", size=10), tickprefix="NT$ ")
+            xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
+            yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
         )
         st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
     else: st.info("Loading performance timeline...")
@@ -555,7 +573,8 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         with ch_2: 
             abs_change = abs(cat_total_change)
             sign = "+" if cat_total_change >= 0 else "-"
-            color = "#34D399" if cat_total_change >= 0 else "#F87171"
+            # ✨ Apple 股市專用色：經典綠 (#30D158) 與 經典紅 (#FF453A)
+            color = "#30D158" if cat_total_change >= 0 else "#FF453A"
             
             if cat_key == "us_stock":
                 val_usd = cat_total_val / exchange_rate
@@ -563,8 +582,8 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                 st.markdown(f"""
                 <div style='text-align:right;'>
                     <strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong>
-                    <span style='font-size:0.85rem; color:#94A3B8; margin-left:4px;'>(US$ {val_usd:,.2f})</span><br>
-                    <span style='font-size:0.8rem; font-family: monospace; color:{color}'>
+                    <span style='font-size:0.85rem; color:#8E8E93; margin-left:4px;'>(US$ {val_usd:,.2f})</span><br>
+                    <span style='font-size:0.8rem; font-family: -apple-system, BlinkMacSystemFont, monospace; color:{color}'>
                         日盈虧: {sign}{format_currency_twd(abs_change)} 
                         <span style='margin-left:2px;'>(US$ {abs_change_usd:,.2f})</span>
                     </span>
@@ -574,7 +593,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                 st.markdown(f"""
                 <div style='text-align:right;'>
                     <strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br>
-                    <span style='font-size:0.8rem; font-family: monospace; color:{color}'>
+                    <span style='font-size:0.8rem; font-family: -apple-system, BlinkMacSystemFont, monospace; color:{color}'>
                         日盈虧: {sign}{format_currency_twd(abs_change)}
                     </span>
                 </div>
@@ -598,18 +617,18 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             if cat_key == "cash": 
                 change_str, price_str, cost_str, return_str = "-", "-", "-", "-"
             else:
-                color_day = "#34D399" if is_pos else "#F87171"
-                color_return = "#34D399" if is_return_pos else "#F87171"
+                color_day = "#30D158" if is_pos else "#FF453A"
+                color_return = "#30D158" if is_return_pos else "#FF453A"
                 
-                change_str = f"<span style='color:{color_day}; font-family:monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
-                return_str = f"<span style='color:{color_return}; font-family:monospace;'>{'+' if is_return_pos else ''}{a['unrealizedPnlPercent']:.2f}% ({'+' if is_return_pos else '-'}{format_currency_twd(abs(a['unrealizedPnlTWD']))})</span>"
+                change_str = f"<span style='color:{color_day}; font-family:-apple-system, BlinkMacSystemFont, monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
+                return_str = f"<span style='color:{color_return}; font-family:-apple-system, BlinkMacSystemFont, monospace;'>{'+' if is_return_pos else ''}{a['unrealizedPnlPercent']:.2f}% ({'+' if is_return_pos else '-'}{format_currency_twd(abs(a['unrealizedPnlTWD']))})</span>"
                 price_str = format_currency_foreign(a["currentPrice"], a["currency"])
                 cost_str = format_currency_foreign(a["average_cost"], a["currency"])
                 
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(cols_ratio)
             
-            multi_tag = f" <span style='font-size:0.65rem; background:#1E293B; padding:2px 4px; border-radius:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
-            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#8BA1C0;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
+            multi_tag = f" <span style='font-size:0.65rem; background:#2C2C2E; color:#FFFFFF; padding:2px 6px; border-radius:10px; margin-left:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
+            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#8E8E93;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
             c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
             c3.markdown(cost_str)
             c4.markdown(price_str)
@@ -651,7 +670,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
 # ----------------- Footer -----------------
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: #64748B; font-size: 0.75rem; font-family: monospace;'>"
+    "<div style='text-align: center; color: #8E8E93; font-size: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, monospace;'>"
     f"Tony's Asset Dashboard • Live Sync via Yahoo Finance & Firebase • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     "</div>", 
     unsafe_allow_html=True
