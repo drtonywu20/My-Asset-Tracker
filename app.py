@@ -27,9 +27,9 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. 整體網頁背景：極致深色，讓深藍色卡片能「跳」出來 */
-    .stApp { background-color: #07090E; color: #F1F5F9; }
-    header[data-testid="stHeader"] { background-color: #07090E; }
+    /* 1. 整體網頁背景：極致純黑，產生最強烈的對比 */
+    .stApp { background-color: #000000 !important; }
+    header[data-testid="stHeader"] { background-color: #000000 !important; }
     
     /* 2. 標題與指標字體 */
     .main-title { font-family: 'Inter', sans-serif; font-weight: 700; color: #E2E9EF; }
@@ -37,29 +37,30 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
     div[data-testid="stMetricLabel"] { color: #94A3B8 !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     
-    /* 3. ✨ 核心修正：統一的深藍色卡片設計 */
+    /* 3. ✨ 核心修正：統一的深藍色卡片設計 (確保顏色明顯跳出) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #16243A !important; /* 統一的高質感深藍色背景 */
+        background-color: #121F33 !important; /* 明顯的高質感深海藍 */
         border: 1px solid #2A3B57 !important; /* 柔和的藍色邊框 */
         border-radius: 16px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.4) !important; /* 卡片浮出感 */
+        box-shadow: 0 8px 30px rgba(0, 0, 0, 0.6) !important; /* 強烈的卡片浮出感 */
     }
     
-    /* 強制內部區塊透明，讓深藍色可以完美填滿 */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div[data-testid="stVerticalBlock"] {
+    /* ✨ 強制清除容器內部所有的背景覆蓋，確保深藍色 100% 顯色 */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    div[data-testid="stVerticalBlockBorderWrapper"] > div > div {
         background-color: transparent !important;
     }
     
     /* 其他次要元素背景 (如彈出選單) */
     .css-1r6g72q, .stCollapse { 
         border: 1px solid #2A3B57 !important; 
-        background-color: #16243A !important; 
+        background-color: #121F33 !important; 
         border-radius: 12px; 
         padding: 1rem; 
     }
     
-    /* 4. 表格內的線條與表頭，配色與深藍色卡片融為一體 */
+    /* 4. 表格內的線條與表頭 */
     .row-divider { border-bottom: 1px solid #2A3B57; margin-top: 0.5rem; margin-bottom: 0.5rem; }
     .table-header { color: #8BA1C0; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
