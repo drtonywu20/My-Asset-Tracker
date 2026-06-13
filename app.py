@@ -95,7 +95,7 @@ CATEGORY_LABELS = {"tw_stock": "Taiwan Stocks", "us_stock": "US Stocks", "crypto
 CATEGORY_COLORS = {"tw_stock": "#3B82F6", "us_stock": "#8B5CF6", "crypto": "#F59E0B", "cash": "#10B981"}
 
 ACCOUNT_LABELS = {
-    "Default": "預設帳戶 (Default)",
+    "Default": "國泰證券戶",
     "Cathay": "國泰複委託 (Cathay)",
     "IB": "IB海外券商 (IB)"
 }
@@ -160,7 +160,8 @@ def fetch_realtime_market_data(assets_list):
     exchange_rate = 32.5
     
     try:
-        fx_hist = yf.Ticker("USDTWD=X").history(period="5d", interval="1d")
+        # ✨ 延長抓取天數為 7 天，確保遇到連假時不會漏接
+        fx_hist = yf.Ticker("USDTWD=X").history(period="7d", interval="1d")
         if not fx_hist.empty:
             exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
     except: pass
@@ -171,9 +172,21 @@ def fetch_realtime_market_data(assets_list):
         if sym in quote_data: continue
             
         try:
-            hist = yf.Ticker(sym).history(period="5d", interval="1d")
+            # ✨ 同樣延長為 7 天
+            hist = yf.Ticker(sym).history(period="7d", interval="1d")
             hist = hist.dropna(subset=['Close'])
             if hist.empty: continue
+            
+            # ✨ 核心修復 1：拔除時區並合併重複日期，確保時間軸絕對乾淨
+            hist.index = pd.to_datetime(hist.index, utc=True).tz_convert(None).normalize()
+            hist = hist[~hist.index.duplicated(keep='last')].sort_index()
+            
+            # ✨ 核心修復 2：剔除 Yahoo 在週末/假日偷塞的「0 交易量」假數據 (加密貨幣除外)
+            if asset["category"] != "crypto" and 'Volume' in hist.columns:
+                hist_valid = hist[hist['Volume'] != 0]
+                if not hist_valid.empty:
+                    hist = hist_valid
+                    
             price = hist['Close'].iloc[-1]
             prev_close = hist['Close'].iloc[-2] if len(hist) > 1 else price
             quote_data[sym] = {"price": float(price), "prev_close": float(prev_close)}
@@ -534,7 +547,33 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         cat_total_change = sum(a["dayChangeTWD"] for a in cat_assets)
 
         with ch_2: 
-            st.markdown(f"<div style='text-align:right;'><strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br><span style='font-size:0.8rem; font-family: monospace; color:{'#34D399' if cat_total_change >=0 else '#F87171'}'>{'+' if cat_total_change >=0 else ''}{format_currency_twd(cat_total_change)}</span></div>", unsafe_allow_html=True)
+            abs_change = abs(cat_total_change)
+            sign = "+" if cat_total_change >= 0 else "-"
+            color = "#34D399" if cat_total_change >= 0 else "#F87171"
+            
+            # ✨ 新增：如果是美股，同時計算並顯示美金 (USD) 匯率換算
+            if cat_key == "us_stock":
+                val_usd = cat_total_val / exchange_rate
+                abs_change_usd = abs(cat_total_change / exchange_rate)
+                st.markdown(f"""
+                <div style='text-align:right;'>
+                    <strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong>
+                    <span style='font-size:0.85rem; color:#94A3B8; margin-left:4px;'>(US$ {val_usd:,.2f})</span><br>
+                    <span style='font-size:0.8rem; font-family: monospace; color:{color}'>
+                        日盈虧: {sign}{format_currency_twd(abs_change)} 
+                        <span style='margin-left:2px;'>(US$ {abs_change_usd:,.2f})</span>
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
+            else:
+                st.markdown(f"""
+                <div style='text-align:right;'>
+                    <strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br>
+                    <span style='font-size:0.8rem; font-family: monospace; color:{color}'>
+                        日盈虧: {sign}{format_currency_twd(abs_change)}
+                    </span>
+                </div>
+                """, unsafe_allow_html=True)
         
         hc1, hc2, hc3, hc4, hc5, hc6, hc7, hc8 = st.columns(cols_ratio)
         hc1.markdown("<div class='table-header'>Asset</div>", unsafe_allow_html=True)
@@ -577,7 +616,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                 with st.popover("⚙️"):
                     st.markdown(f"**Adjust {a['symbol'].split('.')[0]}**")
                     for i, u in enumerate(a["underlying"]):
-                        acc_label = ACCOUNT_LABELS.get(u.get("account", "Default"), "預設 (Default)")
+                        acc_label = ACCOUNT_LABELS.get(u.get("account", "Default"), "國泰證券戶")
                         st.caption(f"Broker: {acc_label}")
                         new_qty = st.number_input(f"Holdings", min_value=0.0, value=float(u['quantity']), format="%.5f", key=f"qty_{u['id']}")
                         new_cost = st.number_input(f"Average Cost", min_value=0.0, value=float(u['average_cost']), format="%.5f", key=f"cost_{u['id']}")
