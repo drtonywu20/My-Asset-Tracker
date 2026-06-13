@@ -5,7 +5,7 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import os
-import requests # ✨ 新增 requests 套件以支援即時搜尋
+import requests
 from datetime import datetime, timedelta
 
 # ✨ 嘗試匯入 Firebase (防呆：若伺服器還沒安裝也不會崩潰)
@@ -28,59 +28,47 @@ st.set_page_config(
 st.markdown("""
 <style>
     /* 1. App 純黑背景 */
-    .stApp, [data-testid="stAppViewContainer"], [data-testid="stMain"] { 
+    html body [data-testid="stAppViewContainer"], html body [data-testid="stHeader"], html body .stApp { 
         background-color: #000000 !important; 
     }
-    [data-testid="stHeader"] { background-color: transparent !important; }
     
     /* 2. Apple 字體 */
-    .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em;}
-    .highlight-title { color: #0A84FF; font-weight: bold; } 
-    div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
-    div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
+    html body .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em;}
+    html body .highlight-title { color: #0A84FF; font-weight: bold; } 
+    html body div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
+    html body div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
     
-    /* 3. ✨ 核心修正：此版 Streamlit 不再使用 stVerticalBlockBorderWrapper，
-       border=True 容器的樣式是直接套用在最外層 stVerticalBlock 上（透過動態 hash class）。
-       改用結構選擇器：凡是「直接包含 stLayoutWrapper 子元素」的 stVerticalBlock，
-       視為一個卡片容器（這是 border=True container 的結構特徵）。 */
-    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stLayoutWrapper"]) {
+    /* 3. ✨ 終極精準卡片定位：利用 :not(:has(...)) 語法，只針對內部含有 marker 的「最深層獨立容器」套用卡片樣式！
+       這樣可以 100% 確保台股跟美股會是兩塊獨立的玻璃板，絕對不會融合成一大塊！ */
+    html body div[data-testid="stVerticalBlock"]:has(.asset-card-marker):not(:has(div[data-testid="stVerticalBlock"]:has(.asset-card-marker))) {
         background-color: #1C1C1E !important;
-        border: 1px solid #38383A !important;
+        border: 1px solid #333336 !important;
         border-radius: 20px !important;
-        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
+        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
         padding: 1.5rem !important;
-        margin-bottom: 1rem !important;
+        margin-bottom: 2rem !important; /* ✨ 卡片之間的完美呼吸縫隙 */
     }
     
-    /* 避免內部巢狀的 stVerticalBlock（例如 column 裡面的）被誤套用同樣的卡片樣式 */
-    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stLayoutWrapper"]) div[data-testid="stVerticalBlock"] {
-        background-color: transparent !important;
-        border: none !important;
-        box-shadow: none !important;
-        padding: 0 !important;
-        margin-bottom: 0 !important;
-    }
+    /* 隱藏我們用來做標記的元素，不佔用版面空間 */
+    .asset-card-marker { display: none !important; }
     
     /* 彈出選單背景 */
-    [data-testid="stPopoverBody"] {
-        background-color: #2C2C2E !important;
-        border: 1px solid #48484A !important;
+    html body [data-testid="stPopoverBody"] {
+        background-color: #1C1C1E !important;
+        border: 1px solid #333336 !important;
         border-radius: 16px !important;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.8) !important;
-    }
-    [data-testid="stPopoverBody"] > div {
-        background-color: transparent !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.6) !important;
     }
     
-    /* 4. 圓形頭像 */
-    [data-testid="stImage"] img {
+    /* 4. ✨ 圓形頭像 (依要求放大顯示) */
+    html body [data-testid="stImage"] img {
         border-radius: 50% !important;
         object-fit: cover;
     }
     
     /* 5. 表格線條 */
-    .row-divider { border-bottom: 1px solid #2C2C2E; margin-top: 0.75rem; margin-bottom: 0.75rem; }
-    .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    html body .row-divider { border-bottom: 1px solid #333336; margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    html body .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -189,14 +177,12 @@ def fetch_realtime_market_data(assets_list):
             # ✨ 核心修正 1：優先使用 fast_info 獲取最即時且不受 K 線假數據干擾的報價
             try:
                 fi = ticker.fast_info
-                # 確保數值存在
                 if fi.last_price is not None and fi.previous_close is not None:
-                    # 針對假日的防呆，last_price 在休市或收盤後就是準確的最後收盤價
                     quote_data[sym] = {
                         "price": float(fi.last_price), 
                         "prev_close": float(fi.previous_close)
                     }
-                    continue # 成功抓到就跳過歷史 K 線的運算
+                    continue
             except Exception:
                 pass
             
@@ -209,12 +195,11 @@ def fetch_realtime_market_data(assets_list):
             hist = hist[~hist.index.duplicated(keep='last')].sort_index()
             
             if asset["category"] != "crypto":
-                # 剔除六日的假數據 (針對臺股與美股週末沒開盤的情境)
                 hist = hist[hist.index.dayofweek < 5]
                 if 'Volume' in hist.columns:
                     valid_vols = hist['Volume'] > 0
                     if len(valid_vols) > 0:
-                        valid_vols.iloc[-1] = True # 保留最後一天防剛開盤無交易量
+                        valid_vols.iloc[-1] = True
                         hist = hist[valid_vols]
                     
             price = float(hist['Close'].iloc[-1])
@@ -338,7 +323,8 @@ if "assets" not in st.session_state: st.session_state.assets = load_assets()
 
 # --- Sidebar Connection Status ---
 with st.sidebar:
-    st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=200&q=80", width=100)
+    # ✨ 放大的圓形頭像
+    st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=300&q=80", width=150)
     st.markdown("### System Status")
     if get_db():
         st.success("🟢 Firebase Cloud Sync: Active")
@@ -509,6 +495,9 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     if not raw_cat_assets: continue
     
     with st.container(border=True):
+        # ✨ 最關鍵的一步：在每一個獨立卡片的最前面，埋入隱形追蹤器！
+        # 靠著這個追蹤器，CSS 就能精準抓出「唯一獨立的卡片」，徹底斬斷連體嬰的悲劇
+        st.markdown("<span class='asset-card-marker'></span>", unsafe_allow_html=True)
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
@@ -571,7 +560,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         with ch_2: 
             abs_change = abs(cat_total_change)
             sign = "+" if cat_total_change >= 0 else "-"
-            # ✨ Apple 股市專用色：經典綠 (#30D158) 與 經典紅 (#FF453A)
+            # ✨ Apple 股市專用色
             color = "#30D158" if cat_total_change >= 0 else "#FF453A"
             
             if cat_key == "us_stock":
