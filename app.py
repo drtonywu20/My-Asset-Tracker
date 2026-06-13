@@ -27,49 +27,41 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    .stApp { background-color: #0B0E14; color: #F1F5F9; }
-    header[data-testid="stHeader"] { background-color: #0B0E14; }
+    /* 1. 整體網頁背景：極致黑 (用來對比卡片的深藍色) */
+    .stApp { background-color: #0A0A0A; color: #F1F5F9; }
+    header[data-testid="stHeader"] { background-color: #0A0A0A; }
+    
+    /* 2. 標題與指標字體 */
     .main-title { font-family: 'Inter', sans-serif; font-weight: 700; color: #E2E9EF; }
     .highlight-title { color: #E2E9F4; font-weight: bold; }
     div[data-testid="stMetricValue"] { font-family: 'JetBrains Mono', monospace; font-weight: 700; font-size: 2rem !important; }
-    div[data-testid="stMetricLabel"] { color: #64748B !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
+    div[data-testid="stMetricLabel"] { color: #94A3B8 !important; text-transform: uppercase; font-size: 0.75rem !important; letter-spacing: 0.1em; }
     
-    .css-1r6g72q, .stCollapse { border: 1px solid #1E293B !important; background-color: #0F172A !important; border-radius: 12px; padding: 1rem; }
+    /* 3. ✨ 核心修正：讓所有「外框容器」強制變成質感深藍色卡片，徹底消滅死黑與白框！ */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #111827 !important; /* 明顯的深藍灰色背景 */
+        border: 1px solid #1E293B !important; /* 柔和的深色同色系邊框，不再刺眼 */
+        border-radius: 16px !important;
+        padding: 1.5rem !important;
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3) !important; /* 卡片浮出感 */
+    }
     
-    /* 預設卡片樣式 */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        border: 1px solid #1E293B !important;
+    /* 強制內部區塊透明，讓深藍色可以完美填滿 */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div[data-testid="stVerticalBlock"] {
+        background-color: transparent !important;
+    }
+    
+    /* 其他次要元素背景 (如彈出選單) */
+    .css-1r6g72q, .stCollapse { 
+        border: 1px solid #1E293B !important; 
         background-color: #111827 !important; 
-        border-radius: 16px;
-        padding: 1.5rem 1rem;
-        margin-bottom: 1.5rem;
-        transition: all 0.3s ease;
+        border-radius: 12px; 
+        padding: 1rem; 
     }
     
-    /* 利用現代 CSS 賦予各區塊專屬的「漸層背景與頂部重點色框」 */
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-tw_stock) > div {
-        background: linear-gradient(180deg, rgba(59, 130, 246, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
-        border-color: rgba(59, 130, 246, 0.2) !important;
-        border-top: 3px solid #3B82F6 !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-us_stock) > div {
-        background: linear-gradient(180deg, rgba(139, 92, 246, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
-        border-color: rgba(139, 92, 246, 0.2) !important;
-        border-top: 3px solid #8B5CF6 !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-crypto) > div {
-        background: linear-gradient(180deg, rgba(245, 158, 11, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
-        border-color: rgba(245, 158, 11, 0.2) !important;
-        border-top: 3px solid #F59E0B !important;
-    }
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(.cat-cash) > div {
-        background: linear-gradient(180deg, rgba(16, 185, 129, 0.08) 0%, rgba(17, 24, 39, 1) 100%) !important;
-        border-color: rgba(16, 185, 129, 0.2) !important;
-        border-top: 3px solid #10B981 !important;
-    }
-    
-    .row-divider { border-bottom: 1px solid rgba(255,255,255,0.05); margin-top: 0.5rem; margin-bottom: 0.5rem; }
-    .table-header { color: #94A3B8; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    /* 4. 表格內的線條與表頭，配色與深藍色卡片融為一體 */
+    .row-divider { border-bottom: 1px solid #1E293B; margin-top: 0.5rem; margin-bottom: 0.5rem; }
+    .table-header { color: #64748B; font-size: 0.85rem; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -160,7 +152,7 @@ def fetch_realtime_market_data(assets_list):
     exchange_rate = 32.5
     
     try:
-        # ✨ 延長抓取天數為 7 天，確保遇到連假時不會漏接
+        # 延長抓取天數為 7 天，確保遇到連假時不會漏接
         fx_hist = yf.Ticker("USDTWD=X").history(period="7d", interval="1d")
         if not fx_hist.empty:
             exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
@@ -172,16 +164,15 @@ def fetch_realtime_market_data(assets_list):
         if sym in quote_data: continue
             
         try:
-            # ✨ 同樣延長為 7 天
             hist = yf.Ticker(sym).history(period="7d", interval="1d")
             hist = hist.dropna(subset=['Close'])
             if hist.empty: continue
             
-            # ✨ 核心修復 1：拔除時區並合併重複日期，確保時間軸絕對乾淨
+            # 核心修復 1：拔除時區並合併重複日期，確保時間軸絕對乾淨
             hist.index = pd.to_datetime(hist.index, utc=True).tz_convert(None).normalize()
             hist = hist[~hist.index.duplicated(keep='last')].sort_index()
             
-            # ✨ 核心修復 2：剔除 Yahoo 在週末/假日偷塞的「0 交易量」假數據 (加密貨幣除外)
+            # 核心修復 2：剔除 Yahoo 在週末/假日偷塞的「0 交易量」假數據 (加密貨幣除外)
             if asset["category"] != "crypto" and 'Volume' in hist.columns:
                 hist_valid = hist[hist['Volume'] != 0]
                 if not hist_valid.empty:
@@ -333,19 +324,16 @@ with action_c2:
     with st.popover("➕ Add Asset", use_container_width=True):
         st.markdown("**Add New Asset (新增資產)**")
         
-        # ✨ 第一步：獨立於 Form 之外的動態搜尋框，按 Enter 會觸發重整撈取資料
         search_kw = st.text_input("🔍 1. Search (輸入代碼或關鍵字後按 Enter)", placeholder="e.g. 2330 或 AAPL")
         
         options_dict = {}
         if search_kw:
             try:
-                # 串接 Yahoo 官方即時搜尋 API
                 url = f"https://query2.finance.yahoo.com/v1/finance/search?q={search_kw}"
                 headers = {'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64)'}
                 r = requests.get(url, headers=headers, timeout=5)
                 data = r.json()
                 for q in data.get('quotes', []):
-                    # 過濾掉無關的資訊，只保留股票、ETF或加密貨幣
                     if 'symbol' in q and q.get('quoteType') in ['EQUITY', 'ETF', 'MUTUALFUND', 'CRYPTOCURRENCY', 'CURRENCY']:
                         sym = q['symbol']
                         name = q.get('shortname', q.get('longname', 'Unknown'))
@@ -354,13 +342,10 @@ with action_c2:
             except Exception:
                 pass
         
-        # ✨ 第二步：將找到的標的放入 Form 的選單中讓使用者確認
         with st.form("add_asset_form", clear_on_submit=True):
             if options_dict:
-                # 如果有搜尋結果，直接跳出下拉選單供精確選擇
                 new_sym = st.selectbox("🎯 2. Select Asset (選擇精確標的)", list(options_dict.keys()), format_func=lambda x: options_dict[x])
             else:
-                # 若無結果或剛打開視窗，保留手動輸入欄位
                 new_sym = st.text_input("🎯 2. Symbol (找不到搜尋結果時可手動輸入)", value=search_kw.upper() if search_kw else "")
 
             new_cat = st.selectbox("Category (資產分類)", options=list(CATEGORY_LABELS.keys()), format_func=lambda x: CATEGORY_LABELS[x])
@@ -374,14 +359,12 @@ with action_c2:
                 else:
                     clean_sym = new_sym.strip().upper()
                     
-                    # ✨ 聰明截取：直接從剛剛的選單萃取公司全名，不用手動打！
                     fetched_name = clean_sym
                     if clean_sym in options_dict:
                         parts = options_dict[clean_sym].split(' | ')
                         if len(parts) > 1:
                             fetched_name = parts[1].rsplit(' (', 1)[0]
                     else:
-                        # 備案：如果使用者硬是手打，嘗試用 yf 補抓
                         try:
                             info = yf.Ticker(clean_sym).info
                             fetched_name = info.get('shortName', info.get('longName', clean_sym))
@@ -486,7 +469,10 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     if not raw_cat_assets: continue
     
     with st.container(border=True):
-        st.markdown(f"<span class='cat-{cat_key}'></span>", unsafe_allow_html=True)
+        # ✨ 解決方案：直接用 HTML 繪製分類的專屬發光顏色條，不依賴容易失效的 CSS
+        st.markdown(f"""
+            <div style="height: 4px; background-color: {CATEGORY_COLORS[cat_key]}; border-radius: 4px; margin-top: -0.5rem; margin-bottom: 1rem; box-shadow: 0 2px 10px {CATEGORY_COLORS[cat_key]}80;"></div>
+        """, unsafe_allow_html=True)
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
@@ -551,7 +537,6 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             sign = "+" if cat_total_change >= 0 else "-"
             color = "#34D399" if cat_total_change >= 0 else "#F87171"
             
-            # ✨ 新增：如果是美股，同時計算並顯示美金 (USD) 匯率換算
             if cat_key == "us_stock":
                 val_usd = cat_total_val / exchange_rate
                 abs_change_usd = abs(cat_total_change / exchange_rate)
