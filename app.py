@@ -27,60 +27,51 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. ✨ 終極核彈級修正：提升 CSS 權重 (Specificity)，絕對貫穿 Streamlit 與瀏覽器快取的防護罩 */
-    html body [data-testid="stAppViewContainer"], 
-    html body [data-testid="stHeader"], 
-    html body .stApp { 
-        background-color: #000000 !important; 
-    }
+    /* 1. App 完美純黑背景 */
+    .stApp, [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
+    [data-testid="stHeader"] { background-color: transparent !important; }
     
-    /* 2. Apple 原生字體 */
-    html body .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em;}
-    html body .highlight-title { color: #0A84FF; font-weight: bold; } 
-    html body div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
-    html body div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
+    /* 2. Apple 字體 */
+    .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em;}
+    .highlight-title { color: #0A84FF; font-weight: bold; } 
+    div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
+    div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
     
-    /* 3. ✨ 核心視覺：強制太空灰卡片顯色 */
-    /* 加上 html body div.stApp 來產生最高層級的 CSS 權重，強壓系統預設值 */
-    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #1C1C1E !important; 
-        background: #1C1C1E !important;
-        border: 1px solid #333336 !important; 
+    /* 3. ✨ 核心視覺：提高亮度的太空灰卡片，保證絕對可見！ */
+    div[data-testid="stVerticalBlockBorderWrapper"] {
+        background-color: #262629 !important; /* 亮度提高的深灰色，絕對不再是一坨黑 */
+        border: 1px solid #48484A !important; /* 更明顯的邊框線條 */
         border-radius: 20px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5) !important;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.8) !important;
     }
     
-    /* ✨ 徹底溶解內層死黑：將卡片內部的所有排版容器，全部強制打回透明！ */
-    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] > div,
-    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"],
-    html body div.stApp [data-testid="stVerticalBlockBorderWrapper"] [data-testid="column"] {
+    /* 挖空所有內部排版圖層，保證深灰色透出來 (避免誤傷按鈕或輸入框) */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div,
+    div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {
         background-color: transparent !important; 
-        background: transparent !important;
     }
     
     /* 彈出選單背景 */
-    html body [data-testid="stPopoverBody"] {
-        background-color: #1C1C1E !important;
-        background: #1C1C1E !important;
-        border: 1px solid #333336 !important;
+    [data-testid="stPopoverBody"] {
+        background-color: #262629 !important;
+        border: 1px solid #48484A !important;
         border-radius: 16px !important;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.6) !important;
+        box-shadow: 0 20px 40px rgba(0,0,0,0.8) !important;
     }
-    html body [data-testid="stPopoverBody"] > div {
+    [data-testid="stPopoverBody"] > div {
         background-color: transparent !important;
-        background: transparent !important;
     }
     
     /* 4. 圓形頭像 */
-    html body [data-testid="stImage"] img {
+    [data-testid="stImage"] img {
         border-radius: 50% !important;
         object-fit: cover;
     }
     
     /* 5. 表格線條 */
-    html body .row-divider { border-bottom: 1px solid #333336; margin-top: 0.75rem; margin-bottom: 0.75rem; }
-    html body .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    .row-divider { border-bottom: 1px solid #48484A; margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
 
@@ -338,7 +329,6 @@ if "assets" not in st.session_state: st.session_state.assets = load_assets()
 
 # --- Sidebar Connection Status ---
 with st.sidebar:
-    # ✨ 這裡把圖片放大了，而且上方的 CSS 會自動把它變成完美圓形！
     st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=200&q=80", width=100)
     st.markdown("### System Status")
     if get_db():
@@ -472,7 +462,6 @@ with col_left:
             x=df_hist["date"], 
             y=df_hist[selected_class], 
             mode="lines", 
-            # ✨ 折線圖顏色與 Apple 標籤色同步
             line=dict(color={"total": "#0A84FF", "twStock": "#0A84FF", "usStock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}.get(selected_class, "#0A84FF"), width=3), 
             name=selected_class, 
             hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
