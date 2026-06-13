@@ -39,28 +39,26 @@ st.markdown("""
     div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
     div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
     
-    /* 3. ✨ 核心修正：針對 st.container(border=True) 的卡片背景 */
-    /* 新版 Streamlit 會把 border 樣式放在 stVerticalBlock 本身，並用 has() 判斷 */
-    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stVerticalBlockBorderWrapper"]) {
-        gap: 1rem;
-    }
-    
-    div[data-testid="stVerticalBlockBorderWrapper"]:has(div[data-testid="stVerticalBlock"]) {
+    /* 3. ✨ 核心修正：此版 Streamlit 不再使用 stVerticalBlockBorderWrapper，
+       border=True 容器的樣式是直接套用在最外層 stVerticalBlock 上（透過動態 hash class）。
+       改用結構選擇器：凡是「直接包含 stLayoutWrapper 子元素」的 stVerticalBlock，
+       視為一個卡片容器（這是 border=True container 的結構特徵）。 */
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stLayoutWrapper"]) {
         background-color: #1C1C1E !important;
         border: 1px solid #38383A !important;
         border-radius: 20px !important;
         box-shadow: 0 10px 30px rgba(0, 0, 0, 0.6) !important;
-    }
-    
-    /* 直接針對 wrapper 內部第一層 block 也上色，避免被內層透明覆蓋掉 */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        background-color: #1C1C1E !important;
-        border-radius: 20px !important;
-    }
-    
-    div[data-testid="stVerticalBlockBorderWrapper"] > div > div[data-testid="stVerticalBlock"] {
-        background-color: transparent !important;
         padding: 1.5rem !important;
+        margin-bottom: 1rem !important;
+    }
+    
+    /* 避免內部巢狀的 stVerticalBlock（例如 column 裡面的）被誤套用同樣的卡片樣式 */
+    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stLayoutWrapper"]) div[data-testid="stVerticalBlock"] {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin-bottom: 0 !important;
     }
     
     /* 彈出選單背景 */
@@ -85,6 +83,7 @@ st.markdown("""
     .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
 </style>
 """, unsafe_allow_html=True)
+
 # Path to local database
 DB_FILE = "assets.json"
 
