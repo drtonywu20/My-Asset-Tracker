@@ -28,9 +28,9 @@ st.set_page_config(
 st.markdown("""
 <style>
     /* 1. ✨ 終極修正：強制整個視窗背景變為純黑，覆蓋 Streamlit 預設的深灰色 */
-    [data-testid="stAppViewContainer"] { background-color: #000000 !important; }
-    [data-testid="stHeader"] { background-color: #000000 !important; }
-    .stApp { background-color: #000000 !important; }
+    [data-testid="stAppViewContainer"], [data-testid="stHeader"], .stApp { 
+        background-color: #000000 !important; 
+    }
     
     /* 2. 標題與指標字體 */
     .main-title { font-family: 'Inter', sans-serif; font-weight: 700; color: #E2E9EF; }
@@ -40,24 +40,23 @@ st.markdown("""
     
     /* 3. ✨ 核心視覺：統一的高質感深藍色資產卡片 (從純黑背景跳出來) */
     div[data-testid="stVerticalBlockBorderWrapper"] {
-        background-color: #0B1A30 !important; /* 鮮明的深海藍 */
+        background-color: #0A192F !important; /* 鮮明的高質感深海藍 */
         border: 1px solid #1C3358 !important; /* 亮色藍邊框增加立體感 */
         border-radius: 16px !important;
         padding: 1.5rem !important;
-        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.8) !important; /* 強化浮出效果 */
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6) !important; /* 強化浮出效果 */
     }
     
-    /* ✨ 破甲：強制清除 Streamlit 預設在容器內層偷加的背景色，讓深藍色可以 100% 顯色 */
-    div[data-testid="stVerticalBlockBorderWrapper"] > div {
-        background-color: transparent !important;
-    }
+    /* ✨ 終極破甲：把 Streamlit 偷偷藏在裡面的所有隱藏排版圖層，全部強制染成深藍色！ 
+       這樣深藍色就不會再被「死黑圖層」蓋住了 */
+    div[data-testid="stVerticalBlockBorderWrapper"] > div,
     div[data-testid="stVerticalBlockBorderWrapper"] [data-testid="stVerticalBlock"] {
-        background-color: transparent !important;
+        background-color: #0A192F !important; 
     }
     
-    /* 彈出選單背景同步改為深藍色 */
+    /* 彈出選單背景同步改為稍微亮一點的深藍色，產生層次 */
     [data-testid="stPopoverBody"] {
-        background-color: #0B1A30 !important;
+        background-color: #112240 !important;
         border: 1px solid #1C3358 !important;
         border-radius: 12px;
     }
