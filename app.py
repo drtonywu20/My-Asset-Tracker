@@ -27,14 +27,17 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. App 純黑背景：覆蓋所有 Streamlit 預設深灰底層容器 */
-    .stApp, 
-    [data-testid="stAppViewContainer"], 
-    [data-testid="stMain"],
-    [data-testid="stMainBlockContainer"],
-    [data-testid="stAppViewBlockContainer"],
+    /* 1. App 純黑背景：覆蓋所有 Streamlit 預設深灰底層容器
+       用提高特異性的方式（屬性選擇器自我疊加 + 標籤名）確保蓋過 Streamlit 內建主題色 */
+    html, body,
+    .stApp, .stApp,
+    [data-testid="stAppViewContainer"][data-testid="stAppViewContainer"], 
+    section[data-testid="stMain"][data-testid="stMain"],
+    [data-testid="stMainBlockContainer"][data-testid="stMainBlockContainer"],
+    [data-testid="stAppViewBlockContainer"][data-testid="stAppViewBlockContainer"],
     section.main { 
         background-color: #000000 !important; 
+        background-image: none !important;
         background: #000000 !important;
     }
     [data-testid="stHeader"] { background-color: transparent !important; }
