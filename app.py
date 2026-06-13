@@ -526,15 +526,16 @@ with col_left:
             ))
             
             fig_area.update_layout(
-            margin=dict(l=20, r=20, t=10, b=10), 
-            height=280, 
-            paper_bgcolor="rgba(0,0,0,0)", 
-            plot_bgcolor="rgba(0,0,0,0)", 
-            xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
-            yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
-        )
-        st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
-    else: st.info("Loading performance timeline...")
+                margin=dict(l=20, r=20, t=10, b=10), 
+                height=280, 
+                paper_bgcolor="rgba(0,0,0,0)", 
+                plot_bgcolor="rgba(0,0,0,0)", 
+                xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
+                yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
+            )
+            st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
+        else:
+            st.info("Loading performance timeline...")
 
 with col_right:
     with st.container(border=True):
