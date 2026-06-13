@@ -526,15 +526,15 @@ with col_left:
             ))
             
             fig_area.update_layout(
-                margin=dict(l=20, r=20, t=10, b=10), 
-                height=280, 
-                paper_bgcolor="rgba(0,0,0,0)", 
-                plot_bgcolor="rgba(0,0,0,0)", 
-                xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
-                yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
-            )
-            st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
-        else: st.info("Loading performance timeline...")
+            margin=dict(l=20, r=20, t=10, b=10), 
+            height=280, 
+            paper_bgcolor="rgba(0,0,0,0)", 
+            plot_bgcolor="rgba(0,0,0,0)", 
+            xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
+            yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
+        )
+        st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
+    else: st.info("Loading performance timeline...")
 
 with col_right:
     with st.container(border=True):
@@ -543,9 +543,12 @@ with col_right:
         df_alloc = pd.DataFrame([{"Category": CATEGORY_LABELS[k], "Value": v, "Color": CATEGORY_COLORS[k]} for k, v in {cat: sum(a["totalValueTWD"] for a in portfolio if a["category"] == cat) for cat in CATEGORY_LABELS.keys()}.items() if v > 0])
         if not df_alloc.empty:
             fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
-            fig_pie.update_traces(textinfo="percent+label", textposition="outside", hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
             
-            fig_pie.update_layout(margin=dict(l=60, r=60, t=10, b=10), height=240, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
+            # ✨ 優化 1：調整文字大小與顏色，增添 Apple 質感避免擁擠
+            fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color="#E2E9EF"), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
+            
+            # ✨ 優化 2：高度從 240 提升至 320 來對齊左側卡片，並加大 margin 避免外圍文字被裁切
+            fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
         else: st.info("No asset holdings.")
 
