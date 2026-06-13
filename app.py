@@ -66,7 +66,12 @@ st.markdown("""
        每個 st.container(border=True) 內部會插入一個隱藏的 .card-marker，
        CSS 透過 :has() 找到「直接包含 .card-marker 的 stVerticalBlock」來上色，
        不會誤判頁面根容器或其他區塊。每個卡片各自為獨立色塊，浮在純黑背景上。 */
-    div[data-testid="stVerticalBlock"]:has(> div .card-marker) {
+    /* 確保所有 stVerticalBlock 預設透明，只有標記為卡片的才有背景色 */
+    div[data-testid="stVerticalBlock"] {
+        background-color: transparent !important;
+    }
+    
+    div[data-testid="stVerticalBlock"]:has(> div > .card-marker) {
         background-color: #1C1C1E !important;
         border: 1px solid #2C2C2E !important;
         border-radius: 18px !important;
@@ -74,6 +79,15 @@ st.markdown("""
         padding: 1.5rem !important;
         margin-bottom: 1.5rem !important;
         transition: border-color 0.2s ease;
+    }
+    
+    /* 外層容器（整個 Ledger 區塊的 wrapper）強制透明，避免疊加灰底 */
+    div[data-testid="stVerticalBlock"]:has(div > .card-marker):not(:has(> div > .card-marker)) {
+        background-color: transparent !important;
+        border: none !important;
+        box-shadow: none !important;
+        padding: 0 !important;
+        margin-bottom: 0 !important;
     }
     
     .card-marker { display: none; }
@@ -496,46 +510,50 @@ with m4:
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
-    st.subheader("📈 Performance History")
-    chart_p1, chart_p2 = st.columns([2, 3])
-    with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
-    with chart_p2: selected_class = st.segmented_control("Class", ["total", "twStock", "usStock", "crypto", "cash"], format_func=lambda x: {"total": "Total Portfolio", "twStock": "Taiwan Stocks", "usStock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash Only"}[x], default="total", label_visibility="collapsed")
-        
-    hist_data = fetch_historical_performance(st.session_state.assets, period=selected_period)
-    if hist_data:
-        df_hist = pd.DataFrame(hist_data)
-        fig_area = go.Figure()
-        
-        fig_area.add_trace(go.Scatter(
-            x=df_hist["date"], 
-            y=df_hist[selected_class], 
-            mode="lines", 
-            line=dict(color={"total": "#0A84FF", "twStock": "#0A84FF", "usStock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}.get(selected_class, "#0A84FF"), width=3), 
-            name=selected_class, 
-            hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
-        ))
-        
-        fig_area.update_layout(
-            margin=dict(l=20, r=20, t=10, b=10), 
-            height=280, 
-            paper_bgcolor="rgba(0,0,0,0)", 
-            plot_bgcolor="rgba(0,0,0,0)", 
-            xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
-            yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
-        )
-        st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
-    else: st.info("Loading performance timeline...")
+    with st.container(border=True):
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.subheader("📈 Performance History")
+        chart_p1, chart_p2 = st.columns([2, 3])
+        with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
+        with chart_p2: selected_class = st.segmented_control("Class", ["total", "twStock", "usStock", "crypto", "cash"], format_func=lambda x: {"total": "Total Portfolio", "twStock": "Taiwan Stocks", "usStock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash Only"}[x], default="total", label_visibility="collapsed")
+            
+        hist_data = fetch_historical_performance(st.session_state.assets, period=selected_period)
+        if hist_data:
+            df_hist = pd.DataFrame(hist_data)
+            fig_area = go.Figure()
+            
+            fig_area.add_trace(go.Scatter(
+                x=df_hist["date"], 
+                y=df_hist[selected_class], 
+                mode="lines", 
+                line=dict(color={"total": "#0A84FF", "twStock": "#0A84FF", "usStock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}.get(selected_class, "#0A84FF"), width=3), 
+                name=selected_class, 
+                hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
+            ))
+            
+            fig_area.update_layout(
+                margin=dict(l=20, r=20, t=10, b=10), 
+                height=280, 
+                paper_bgcolor="rgba(0,0,0,0)", 
+                plot_bgcolor="rgba(0,0,0,0)", 
+                xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
+                yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
+            )
+            st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
+        else: st.info("Loading performance timeline...")
 
 with col_right:
-    st.subheader("🍩 Current Asset Allocation")
-    df_alloc = pd.DataFrame([{"Category": CATEGORY_LABELS[k], "Value": v, "Color": CATEGORY_COLORS[k]} for k, v in {cat: sum(a["totalValueTWD"] for a in portfolio if a["category"] == cat) for cat in CATEGORY_LABELS.keys()}.items() if v > 0])
-    if not df_alloc.empty:
-        fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
-        fig_pie.update_traces(textinfo="percent+label", textposition="outside", hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
-        
-        fig_pie.update_layout(margin=dict(l=60, r=60, t=10, b=10), height=240, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
-        st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
-    else: st.info("No asset holdings.")
+    with st.container(border=True):
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.subheader("🍩 Current Asset Allocation")
+        df_alloc = pd.DataFrame([{"Category": CATEGORY_LABELS[k], "Value": v, "Color": CATEGORY_COLORS[k]} for k, v in {cat: sum(a["totalValueTWD"] for a in portfolio if a["category"] == cat) for cat in CATEGORY_LABELS.keys()}.items() if v > 0])
+        if not df_alloc.empty:
+            fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
+            fig_pie.update_traces(textinfo="percent+label", textposition="outside", hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
+            
+            fig_pie.update_layout(margin=dict(l=60, r=60, t=10, b=10), height=240, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
+            st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
+        else: st.info("No asset holdings.")
 
 # ----------------- Grouped Asset Interactive Table -----------------
 st.markdown("---")
