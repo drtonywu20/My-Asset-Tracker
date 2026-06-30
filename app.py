@@ -8,13 +8,20 @@ import os
 import requests # ✨ 新增 requests 套件以支援即時搜尋
 from datetime import datetime, timedelta
 
-# ✨ 嘗試匯入 Firebase (防呆：若伺服器還沒安裝也不會崩潰)
+# ✨ 嘗試匯入 Firebase
 try:
     import firebase_admin
     from firebase_admin import credentials, firestore
     FIREBASE_AVAILABLE = True
 except ImportError:
     FIREBASE_AVAILABLE = False
+
+# ✨ 嘗試匯入 Google Generative AI (Gemini)
+try:
+    import google.generativeai as genai
+    GEMINI_IMPORTED = True
+except ImportError:
+    GEMINI_IMPORTED = False
 
 # Set page configuration
 st.set_page_config(
@@ -27,8 +34,7 @@ st.set_page_config(
 # Custom Styling to match the original React dark cosmic aesthetic
 st.markdown("""
 <style>
-    /* 1. App 純黑背景：覆蓋所有 Streamlit 預設深灰底層容器
-       用提高特異性的方式（屬性選擇器自我疊加 + 標籤名）確保蓋過 Streamlit 內建主題色 */
+    /* 1. App 純黑背景 */
     html, body,
     .stApp, .stApp,
     [data-testid="stAppViewContainer"][data-testid="stAppViewContainer"], 
@@ -78,6 +84,9 @@ st.markdown("""
     }
     
     .card-marker { display: none; }
+    
+    /* AI Chat 樣式微調 */
+    [data-testid="stChatMessage"] { background-color: transparent !important; }
     
     /* 彈出選單背景 */
     [data-testid="stPopoverBody"] {
@@ -501,7 +510,7 @@ st.markdown("---")
 
 # ----------------- Dashboard Layout -----------------
 
-# ✨ 因為總資產移到了上面，現在卡片區縮減為完美平衡的 3 格！
+# ✨ 卡片區縮減為完美平衡的 3 格
 m1, m2, m3 = st.columns([1, 1, 1])
 
 with m1:
@@ -543,30 +552,113 @@ with col_left:
             ))
             
             fig_area.update_layout(
-                margin=dict(l=20, r=20, t=10, b=10), 
-                height=280, 
-                paper_bgcolor="rgba(0,0,0,0)", 
-                plot_bgcolor="rgba(0,0,0,0)", 
-                xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
-                yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
-            )
-            st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
-        else:
-            st.info("Loading performance timeline...")
+            margin=dict(l=20, r=20, t=10, b=10), 
+            height=280, 
+            paper_bgcolor="rgba(0,0,0,0)", 
+            plot_bgcolor="rgba(0,0,0,0)", 
+            xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
+            yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
+        )
+        st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
+    else:
+        st.info("Loading performance timeline...")
 
 with col_right:
     with st.container(border=True):
         st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
-        st.subheader("🍩 Current Asset Allocation")
-        df_alloc = pd.DataFrame([{"Category": CATEGORY_LABELS[k], "Value": v, "Color": CATEGORY_COLORS[k]} for k, v in {cat: sum(a["totalValueTWD"] for a in portfolio if a["category"] == cat) for cat in CATEGORY_LABELS.keys()}.items() if v > 0])
+        
+        # ✨ 新增排版：將標題與切換按鈕並列
+        pie_title_col, pie_btn_col = st.columns([1.5, 1])
+        with pie_title_col:
+            st.subheader("🍩 Current Asset Allocation")
+        with pie_btn_col:
+            alloc_view = st.segmented_control("View", ["Category", "Asset"], format_func=lambda x: "資產類別" if x == "Category" else "單一標的", default="Category", label_visibility="collapsed")
+        
+        if alloc_view == "Category":
+            df_alloc = pd.DataFrame([{"Category": CATEGORY_LABELS[k], "Value": v, "Color": CATEGORY_COLORS[k]} for k, v in {cat: sum(a["totalValueTWD"] for a in portfolio if a["category"] == cat) for cat in CATEGORY_LABELS.keys()}.items() if v > 0])
+            if not df_alloc.empty:
+                fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
+        else:
+            # ✨ 計算單一標的合併後的總市值
+            asset_totals = {}
+            for a in portfolio:
+                sym = a["symbol"].split('.')[0] # 取短代號，例如 TSLA, 00631L
+                asset_totals[sym] = asset_totals.get(sym, 0) + a["totalValueTWD"]
+            df_alloc = pd.DataFrame([{"Asset": k, "Value": v} for k, v in asset_totals.items() if v > 0])
+            if not df_alloc.empty:
+                fig_pie = px.pie(df_alloc, values="Value", names="Asset", hole=0.55)
+
         if not df_alloc.empty:
-            fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
-            
+            # ✨ 優化 1：調整文字大小與顏色，增添 Apple 質感避免擁擠
             fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color="#E2E9EF"), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
             
+            # ✨ 優化 2：高度從 240 提升至 320 來對齊左側卡片，並加大 margin 避免外圍文字被裁切
             fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
         else: st.info("No asset holdings.")
+
+# ----------------- AI Portfolio Advisor -----------------
+st.markdown("---")
+st.subheader("🤖 AI Portfolio Advisor")
+
+with st.container(border=True):
+    st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+    
+    if not GEMINI_IMPORTED or "GEMINI_API_KEY" not in st.secrets:
+        st.warning("⚠️ AI 分析模組尚未啟用")
+        st.info("""
+        **💡 3 步驟免費啟用 Google Gemini AI 顧問：**
+        1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 登入並獲取免費的 API Key。
+        2. 在 Streamlit 的 Secrets 設定中新增：`GEMINI_API_KEY = "你的金鑰"`
+        3. 在 GitHub 的 `requirements.txt` 檔案中加入：`google-generativeai`
+        """)
+    else:
+        # 初始化 Gemini API
+        genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+        model = genai.GenerativeModel('gemini-1.5-flash')
+        
+        # 初始化對話紀錄
+        if "chat_history" not in st.session_state:
+            st.session_state.chat_history = []
+            
+        # 顯示歷史對話
+        for msg in st.session_state.chat_history:
+            with st.chat_message(msg["role"]):
+                st.markdown(msg["content"])
+                
+        # 使用者輸入框
+        user_msg = st.chat_input("詢問 AI 關於投資組合的建議，或點擊上方按鈕一鍵分析...")
+        
+        # 一鍵分析按鈕
+        analyze_btn_clicked = False
+        col_btn, _ = st.columns([1, 2])
+        with col_btn:
+            if st.button("✨ 一鍵分析目前的資產配置", use_container_width=True):
+                analyze_btn_clicked = True
+                user_msg = "請以專業財務顧問的角度，分析我目前的資產配置，並根據目前的總體經濟局勢給出建議。"
+                
+        if user_msg:
+            # 顯示使用者的問題 (若是一鍵分析則隱藏這個制式問題，讓版面乾淨)
+            if not analyze_btn_clicked:
+                with st.chat_message("user"):
+                    st.markdown(user_msg)
+            st.session_state.chat_history.append({"role": "user", "content": user_msg})
+            
+            # 在背景將「投資組合現況」偷偷塞給 AI，讓它具備先備知識
+            context = f"以下是我的投資組合現況 (總淨值: NT$ {total_net_worth:,.0f}):\n"
+            for a in portfolio:
+                context += f"- {a['name']} ({a['category']}): 價值 NT$ {a['totalValueTWD']:,.0f} (佔比 {(a['totalValueTWD']/total_net_worth*100) if total_net_worth>0 else 0:.1f}%)\n"
+            
+            full_prompt = f"{context}\n\n使用者問題: {user_msg}"
+            
+            with st.chat_message("assistant"):
+                with st.spinner("AI 正在深度分析中..."):
+                    try:
+                        response = model.generate_content(full_prompt)
+                        st.markdown(response.text)
+                        st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                    except Exception as e:
+                        st.error(f"AI 回應發生錯誤，請確認 API Key 是否正確。詳細錯誤: {e}")
 
 # ----------------- Grouped Asset Interactive Table -----------------
 st.markdown("---")
