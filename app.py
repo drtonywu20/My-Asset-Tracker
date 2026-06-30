@@ -529,9 +529,10 @@ with m3:
 
 col_left, col_right = st.columns([3, 2])
 
+# ✨ 升級 2：走勢圖與圓餅圖也各自套上獨立的玻璃卡片！
 with col_left:
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         st.subheader("📈 Performance History")
         chart_p1, chart_p2 = st.columns([2, 3])
         with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
@@ -552,20 +553,20 @@ with col_left:
             ))
             
             fig_area.update_layout(
-            margin=dict(l=20, r=20, t=10, b=10), 
-            height=280, 
-            paper_bgcolor="rgba(0,0,0,0)", 
-            plot_bgcolor="rgba(0,0,0,0)", 
-            xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
-            yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
-        )
-        st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
-    else:
-        st.info("Loading performance timeline...")
+                margin=dict(l=20, r=20, t=10, b=10), 
+                height=280, 
+                paper_bgcolor="rgba(0,0,0,0)", 
+                plot_bgcolor="rgba(0,0,0,0)", 
+                xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
+                yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
+            )
+            st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
+        else:
+            st.info("Loading performance timeline...")
 
 with col_right:
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         
         # ✨ 新增排版：將標題與切換按鈕並列
         pie_title_col, pie_btn_col = st.columns([1.5, 1])
@@ -579,7 +580,7 @@ with col_right:
             if not df_alloc.empty:
                 fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
         else:
-            # ✨ 計算單一標的合併後的總市值
+            # ✨ 計算單一標的合併後的總市值 (將不同券商的同一檔標的合併)
             asset_totals = {}
             for a in portfolio:
                 sym = a["symbol"].split('.')[0] # 取短代號，例如 TSLA, 00631L
@@ -589,13 +590,12 @@ with col_right:
                 fig_pie = px.pie(df_alloc, values="Value", names="Asset", hole=0.55)
 
         if not df_alloc.empty:
-            # ✨ 優化 1：調整文字大小與顏色，增添 Apple 質感避免擁擠
+            # ✨ 保持 Apple 質感字體與對齊高度
             fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color="#E2E9EF"), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
-            
-            # ✨ 優化 2：高度從 240 提升至 320 來對齊左側卡片，並加大 margin 避免外圍文字被裁切
             fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
-        else: st.info("No asset holdings.")
+        else:
+            st.info("No asset holdings.")
 
 # ----------------- AI Portfolio Advisor -----------------
 st.markdown("---")
