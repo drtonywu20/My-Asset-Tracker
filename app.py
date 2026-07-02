@@ -100,8 +100,64 @@ st.markdown(f"""
     }}
     
     /* 5. 表格線條 */
-    html body .row-divider {{ border-bottom: 1px solid {theme_border}; margin-top: 0.75rem; margin-bottom: 0.75rem; }}
-    html body .table-header {{ color: {theme_subtext}; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}}
+    html body .row-divider { border-bottom: 1px solid {theme_border}; margin-top: 0.75rem; margin-bottom: 0.75rem; }
+    html body .table-header { color: {theme_subtext}; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    
+    /* 6. ✨ 修復原生元件的亮/暗色主題切換 */
+    /* 按鈕、下拉選單按鈕 */
+    html body [data-testid="stBaseButton-secondary"],
+    html body [data-testid="stBaseButton-primary"],
+    html body [data-testid="stPopover"] button,
+    html body button[kind="secondary"],
+    html body button[kind="primary"] {
+        background-color: {theme_card} !important;
+        color: {theme_text} !important;
+        border: 1px solid {theme_border} !important;
+        border-radius: 12px !important;
+    }
+    html body [data-testid="stBaseButton-secondary"]:hover,
+    html body [data-testid="stPopover"] button:hover,
+    html body button[kind="secondary"]:hover {
+        border-color: {CATEGORY_COLORS['tw_stock']} !important;
+        color: {CATEGORY_COLORS['tw_stock']} !important;
+    }
+    
+    /* 分段控制器 (Segmented Control) */
+    html body [data-testid="stSegmentedControl"] {
+        background-color: {theme_border} !important;
+        border-radius: 8px !important;
+    }
+    html body [data-testid="stSegmentedControl"] [role="radio"] {
+        color: {theme_subtext} !important;
+    }
+    html body [data-testid="stSegmentedControl"] [role="radio"][aria-checked="true"] {
+        background-color: {theme_card} !important;
+        color: {theme_text} !important;
+    }
+    
+    /* AI 對話框 (Chat Input) */
+    html body [data-testid="stChatInput"] {
+        background-color: {theme_card} !important;
+        border: 1px solid {theme_border} !important;
+    }
+    html body [data-testid="stChatInput"] textarea {
+        color: {theme_text} !important;
+    }
+    html body [data-testid="stChatInputSubmitButton"] {
+        background-color: {theme_bg} !important;
+        color: {theme_text} !important;
+    }
+    
+    /* 表單與搜尋框輸入 */
+    html body [data-baseweb="input"] > div,
+    html body [data-baseweb="select"] > div {
+        background-color: {theme_card} !important;
+        border: 1px solid {theme_border} !important;
+    }
+    html body [data-baseweb="input"] input,
+    html body [data-baseweb="select"] div {
+        color: {theme_text} !important;
+    }
 </style>
 """, unsafe_allow_html=True)
 
@@ -555,8 +611,8 @@ with col_right:
         if not df_alloc.empty:
             fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color=theme_text), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
             
-            # ✨ 優化高度從 320 -> 380，底部 Margin 從 b=30 -> b=80，給予單一標的文字足夠的顯示空間
-            fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=80), height=380, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
+            # ✨ 終極優化：大幅增加高度與四周邊距，確保多項資產文字絕不被裁切
+            fig_pie.update_layout(margin=dict(l=60, r=60, t=40, b=100), height=420, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
         else:
             st.info("No asset holdings.")
