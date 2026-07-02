@@ -651,28 +651,30 @@ with st.container(border=True):
             with st.chat_message("assistant"):
                 with st.spinner("AI 正在深度分析中..."):
                     try:
-                        # ✨ 終極修復：動態詢問 Google 獲取目前可用的模型清單
-                        # 直接避開 Google 改名導致的 404 錯誤
+                        # ✨ 終極修復：動態獲取模型，並加上「安全濾網」過濾掉沒有免費額度的實驗版
                         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
                         
-                        if not available_models:
-                            st.error("您的 API 金鑰目前沒有可用於生成文字的模型權限。")
+                        # 核心防護：剔除含有 'preview', 'experimental', 'computer' 等被限制額度的模型
+                        safe_models = [m for m in available_models if 'preview' not in m and 'experimental' not in m and 'computer' not in m]
+                        
+                        if not safe_models:
+                            target_model = "models/gemini-1.5-flash" # 終極保底寫法
                         else:
-                            # 自動挑選支援度最高的模型 (優先選擇包含 flash 或 pro 的版本)
-                            target_model = available_models[0] # 預設抓第一個可用的
-                            for m_name in available_models:
+                            # 預設抓第一個安全的，但優先尋找最快、免費額度最高的 flash 模型
+                            target_model = safe_models[0]
+                            for m_name in safe_models:
                                 if 'gemini-1.5-flash' in m_name:
                                     target_model = m_name
-                                    break # 找到首選，直接跳出
-                                elif 'gemini-1.5-pro' in m_name or 'gemini-2' in m_name:
+                                    break
+                                elif 'flash' in m_name:
                                     target_model = m_name
                             
-                            # 使用動態抓取到的確實存在的模型名稱
-                            model = genai.GenerativeModel(target_model)
-                            response = model.generate_content(full_prompt)
-                            
-                            st.markdown(response.text)
-                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                        # 使用過濾後的安全模型名稱
+                        model = genai.GenerativeModel(target_model)
+                        response = model.generate_content(full_prompt)
+                        
+                        st.markdown(response.text)
+                        st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                     except Exception as e:
                         st.error(f"AI 回應發生錯誤。詳細錯誤: {e}")
 
