@@ -651,19 +651,30 @@ with st.container(border=True):
             with st.chat_message("assistant"):
                 with st.spinner("AI 正在深度分析中..."):
                     try:
-                        # 降落傘機制：優先嘗試 1.5 系列，如果套件太舊引發 404 Error，自動切換至穩定的 1.0 版
-                        try:
-                            model = genai.GenerativeModel('gemini-1.5-flash')
-                            response = model.generate_content(full_prompt)
-                        except Exception:
-                            # 自動退回支援度最高、絕對穩定的 gemini-pro (Gemini 1.0)
-                            model = genai.GenerativeModel('gemini-pro')
+                        # ✨ 終極修復：動態詢問 Google 獲取目前可用的模型清單
+                        # 直接避開 Google 改名導致的 404 錯誤
+                        available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
+                        
+                        if not available_models:
+                            st.error("您的 API 金鑰目前沒有可用於生成文字的模型權限。")
+                        else:
+                            # 自動挑選支援度最高的模型 (優先選擇包含 flash 或 pro 的版本)
+                            target_model = available_models[0] # 預設抓第一個可用的
+                            for m_name in available_models:
+                                if 'gemini-1.5-flash' in m_name:
+                                    target_model = m_name
+                                    break # 找到首選，直接跳出
+                                elif 'gemini-1.5-pro' in m_name or 'gemini-2' in m_name:
+                                    target_model = m_name
+                            
+                            # 使用動態抓取到的確實存在的模型名稱
+                            model = genai.GenerativeModel(target_model)
                             response = model.generate_content(full_prompt)
                             
-                        st.markdown(response.text)
-                        st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                            st.markdown(response.text)
+                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                     except Exception as e:
-                        st.error(f"AI 回應發生錯誤，請確認 API Key 是否正確。詳細錯誤: {e}")
+                        st.error(f"AI 回應發生錯誤。詳細錯誤: {e}")
 
 # ----------------- Grouped Asset Interactive Table -----------------
 st.markdown("---")
