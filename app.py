@@ -528,10 +528,9 @@ with m3:
 
 col_left, col_right = st.columns([3, 2])
 
-# ✨ 升級 2：走勢圖與圓餅圖也各自套上獨立的玻璃卡片！
 with col_left:
     with st.container(border=True):
-        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
         st.subheader("📈 Performance History")
         chart_p1, chart_p2 = st.columns([2, 3])
         with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
@@ -565,9 +564,9 @@ with col_left:
 
 with col_right:
     with st.container(border=True):
-        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
         
-        # ✨ 新增排版：將標題與切換按鈕並列
+        # ✨ 新增：將標題與切換按鈕並列
         pie_title_col, pie_btn_col = st.columns([1.5, 1])
         with pie_title_col:
             st.subheader("🍩 Current Asset Allocation")
@@ -579,17 +578,17 @@ with col_right:
             if not df_alloc.empty:
                 fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
         else:
-            # ✨ 計算單一標的合併後的總市值 (將不同券商的同一檔標的合併)
+            # ✨ 計算單一標的合併後的總市值
             asset_totals = {}
             for a in portfolio:
-                sym = a["symbol"].split('.')[0] # 取短代號，例如 TSLA, 00631L
+                sym = a["symbol"].split('.')[0] 
                 asset_totals[sym] = asset_totals.get(sym, 0) + a["totalValueTWD"]
             df_alloc = pd.DataFrame([{"Asset": k, "Value": v} for k, v in asset_totals.items() if v > 0])
             if not df_alloc.empty:
                 fig_pie = px.pie(df_alloc, values="Value", names="Asset", hole=0.55)
 
         if not df_alloc.empty:
-            # ✨ 保持 Apple 質感字體與對齊高度
+            # 保持 Apple 質感字體與對齊高度
             fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color="#E2E9EF"), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
             fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
@@ -601,32 +600,19 @@ st.markdown("---")
 st.subheader("🤖 AI Portfolio Advisor")
 
 with st.container(border=True):
-    st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
     
-    if not GEMINI_IMPORTED:
-        st.warning("⚠️ AI 分析模組尚未啟用：等待套件安裝中")
+    if not GEMINI_IMPORTED or "GEMINI_API_KEY" not in st.secrets:
+        st.warning("⚠️ AI 分析模組尚未啟用")
         st.info("""
-        **💡 系統尚未載入 AI 套件。因為您剛更新了 `requirements.txt`，Streamlit 伺服器需要重新啟動才能下載套件！**
-        
-        **👉 解決步驟 (強制重啟)：**
-        1. 點擊網頁右下角的 **「Manage app」**（管理應用程式）。
-        2. 點擊彈出選單右上角的 **「⋮」** (三個點)。
-        3. 選擇 **「Reboot app」**。
-        4. 等待大約 1~2 分鐘讓伺服器重新安裝套件，畫面重整後就會出現 AI 對話框了！
-        """)
-    elif "GEMINI_API_KEY" not in st.secrets:
-        st.warning("⚠️ AI 分析模組尚未啟用：找不到 API Key")
-        st.info("""
-        **💡 AI 套件已就緒，但在 Secrets 找不到金鑰。**
-        
-        **👉 解決步驟：**
-        請確認在 Streamlit 的 Secrets 設定中，寫法完全沒有多餘的空格，並且有加上引號：
-        `GEMINI_API_KEY = "你的金鑰"`
+        **💡 3 步驟免費啟用 Google Gemini AI 顧問：**
+        1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 登入並獲取免費的 API Key。
+        2. 在 Streamlit 的 Secrets 設定中新增：`GEMINI_API_KEY = "你的金鑰"`
+        3. 在 GitHub 的 `requirements.txt` 檔案中加入：`google-generativeai`
         """)
     else:
         # 初始化 Gemini API
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
-        model = genai.GenerativeModel('gemini-1.5-flash')
         
         # 初始化對話紀錄
         if "chat_history" not in st.session_state:
@@ -665,7 +651,15 @@ with st.container(border=True):
             with st.chat_message("assistant"):
                 with st.spinner("AI 正在深度分析中..."):
                     try:
-                        response = model.generate_content(full_prompt)
+                        # 降落傘機制：優先嘗試 1.5 系列，如果套件太舊引發 404 Error，自動切換至穩定的 1.0 版
+                        try:
+                            model = genai.GenerativeModel('gemini-1.5-flash')
+                            response = model.generate_content(full_prompt)
+                        except Exception:
+                            # 自動退回支援度最高、絕對穩定的 gemini-pro (Gemini 1.0)
+                            model = genai.GenerativeModel('gemini-pro')
+                            response = model.generate_content(full_prompt)
+                            
                         st.markdown(response.text)
                         st.session_state.chat_history.append({"role": "assistant", "content": response.text})
                     except Exception as e:
