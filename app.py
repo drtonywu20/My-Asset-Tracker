@@ -5,10 +5,10 @@ import plotly.express as px
 import plotly.graph_objects as go
 import json
 import os
-import requests # ✨ 新增 requests 套件以支援即時搜尋
+import requests
 from datetime import datetime, timedelta
 
-# ✨ 嘗試匯入 Firebase
+# 嘗試匯入 Firebase
 try:
     import firebase_admin
     from firebase_admin import credentials, firestore
@@ -16,6 +16,7 @@ try:
 except ImportError:
     FIREBASE_AVAILABLE = False
 
+# 嘗試匯入 Google Generative AI (Gemini)
 try:
     import google.generativeai as genai
     GEMINI_IMPORTED = True
@@ -30,105 +31,77 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# Custom Styling to match the original React dark cosmic aesthetic
-st.markdown("""
+# ✨ 主題引擎：判斷目前模式，並設定對應的 Apple 美學色碼
+if "theme" not in st.session_state:
+    st.session_state.theme = "dark"
+
+is_dark = st.session_state.theme == "dark"
+
+# 定義 Apple 規範色彩
+theme_bg = "#000000" if is_dark else "#F5F5F7"       # App 背景色
+theme_card = "#1C1C1E" if is_dark else "#FFFFFF"     # 卡片背景色
+theme_text = "#FFFFFF" if is_dark else "#1D1D1F"     # 主要文字顏色
+theme_subtext = "#8E8E93" if is_dark else "#86868B"  # 次要文字顏色
+theme_border = "#2C2C2E" if is_dark else "#E5E5EA"   # 邊框與分隔線
+theme_green = "#30D158" if is_dark else "#34C759"    # 上漲/正數
+theme_red = "#FF453A" if is_dark else "#FF3B30"      # 下跌/負數
+shadow_opacity = "0.5" if is_dark else "0.05"        # 陰影透明度
+
+# 類別專屬色彩
+CATEGORY_COLORS = {
+    "tw_stock": "#0A84FF" if is_dark else "#007AFF", 
+    "us_stock": "#5E5CE6" if is_dark else "#5856D6", 
+    "crypto": "#FF9F0A" if is_dark else "#FF9500", 
+    "cash": theme_green
+}
+
+# Custom Styling injecting the dynamic theme colors
+st.markdown(f"""
 <style>
-    /* 1. App 純黑背景 */
-    html, body,
-    .stApp, .stApp,
-    [data-testid="stAppViewContainer"][data-testid="stAppViewContainer"], 
-    [data-testid="stAppViewContainer"] > div,
-    section[data-testid="stMain"][data-testid="stMain"],
-    [data-testid="stMainBlockContainer"][data-testid="stMainBlockContainer"],
-    [data-testid="stAppViewBlockContainer"][data-testid="stAppViewBlockContainer"],
-    section.main { 
-        background-color: #000000 !important; 
-        background-image: none !important;
-        background: #000000 !important;
-    }
-    [data-testid="stHeader"] { background-color: transparent !important; }
+    /* 1. App 動態背景色 */
+    html body [data-testid="stAppViewContainer"], html body [data-testid="stHeader"], html body .stApp {{ 
+        background-color: {theme_bg} !important; 
+    }}
     
-    /* 2. Apple 字體與排版 */
-    html, body, .stApp, [data-testid="stAppViewContainer"] {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif !important;
-    }
-    .main-title { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: #FFFFFF; letter-spacing: -0.02em; font-size: 2.4rem; margin-bottom: 0.2rem; }
-    .highlight-title { color: #0A84FF; font-weight: bold; } 
-    div[data-testid="stMetricValue"] { font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; }
-    div[data-testid="stMetricLabel"] { color: #8E8E93 !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }
+    /* 2. Apple 字體與文字層次 */
+    html body .main-title {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; font-weight: 700; color: {theme_text}; letter-spacing: -0.02em;}}
+    html body .highlight-title {{ color: {CATEGORY_COLORS['tw_stock']}; font-weight: bold; }} 
+    html body div[data-testid="stMetricValue"] {{ font-family: -apple-system, BlinkMacSystemFont, monospace; font-weight: 700; font-size: 1.8rem !important; letter-spacing: -0.01em; color: {theme_text} !important;}}
+    html body div[data-testid="stMetricLabel"] {{ color: {theme_subtext} !important; text-transform: uppercase; font-size: 0.7rem !important; letter-spacing: 0.05em; font-weight: 600; }}
+    html body p, html body .stMarkdown p, html body h3, html body h4 {{ color: {theme_text} !important; }}
     
-    /* Apple 風格的次要文字顏色 */
-    p, .stMarkdown, [data-testid="stMarkdownContainer"] p {
-        color: #F2F2F7;
-    }
-    h3, h4, .stSubheader, [data-testid="stHeadingWithActionElements"] h4 {
-        color: #FFFFFF !important;
-        font-weight: 600 !important;
-        letter-spacing: -0.01em;
-    }
-    
-    /* 3. ✨ 卡片容器：用「標記元素」精準鎖定每個資產分類區塊。 */
-    div[data-testid="stVerticalBlock"] {
-        background-color: transparent !important;
-    }
-    
-    div[data-testid="stVerticalBlock"]:has(> div[data-testid="stElementContainer"]:first-child .card-marker) {
-        background-color: #1C1C1E !important;
-        border: 1px solid #2C2C2E !important;
-        border-radius: 18px !important;
-        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5) !important;
+    /* 3. ✨ 終極精準卡片定位器：配合主題引擎套用顏色與陰影 */
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .section-card) {{
+        background-color: {theme_card} !important; 
+        border: 1px solid {theme_border} !important; 
+        border-radius: 20px !important;
         padding: 1.5rem !important;
-        margin-bottom: 1.5rem !important;
-        transition: border-color 0.2s ease;
-    }
+        box-shadow: 0 8px 30px rgba(0, 0, 0, {shadow_opacity}) !important;
+    }}
     
-    .card-marker { display: none; }
+    div[data-testid="stVerticalBlock"]:has(> div.element-container .section-card) > div {{
+        background-color: transparent !important;
+    }}
     
-    /* AI Chat 樣式微調 */
-    [data-testid="stChatMessage"] { background-color: transparent !important; }
+    .section-card {{ display: none !important; }}
     
     /* 彈出選單背景 */
-    [data-testid="stPopoverBody"] {
-        background-color: #2C2C2E !important;
-        border: 1px solid #48484A !important;
+    html body [data-testid="stPopoverBody"] {{
+        background-color: {theme_card} !important;
+        border: 1px solid {theme_border} !important;
         border-radius: 16px !important;
-        box-shadow: 0 20px 40px rgba(0,0,0,0.8) !important;
-    }
-    [data-testid="stPopoverBody"] > div {
-        background-color: transparent !important;
-    }
-    
-    /* Apple 風格按鈕：圓潤、低對比、平滑過渡 */
-    [data-testid="stButton"] button, [data-testid="stPopoverButton"] {
-        border-radius: 12px !important;
-        font-weight: 600 !important;
-        transition: all 0.15s ease !important;
-        border: 1px solid #38383A !important;
-    }
-    [data-testid="stButton"] button:hover, [data-testid="stPopoverButton"]:hover {
-        border-color: #0A84FF !important;
-        background-color: #2C2C2E !important;
-    }
-    
-    /* Segmented control 風格微調 */
-    [data-testid="stSegmentedControl"] label {
-        border-radius: 10px !important;
-    }
-    
-    /* Number input / text input 圓角 */
-    [data-baseweb="input"], [data-baseweb="select"] {
-        border-radius: 10px !important;
-    }
+        box-shadow: 0 20px 40px rgba(0,0,0,{(0.8 if is_dark else 0.1)}) !important;
+    }}
     
     /* 4. 圓形頭像 */
-    [data-testid="stImage"] img {
+    html body [data-testid="stImage"] img {{
         border-radius: 50% !important;
         object-fit: cover;
-    }
+    }}
     
     /* 5. 表格線條 */
-    .row-divider { border-bottom: 1px solid #2C2C2E; margin-top: 0.75rem; margin-bottom: 0.75rem; }
-    .table-header { color: #8E8E93; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}
+    html body .row-divider {{ border-bottom: 1px solid {theme_border}; margin-top: 0.75rem; margin-bottom: 0.75rem; }}
+    html body .table-header {{ color: {theme_subtext}; font-size: 0.8rem; text-transform: uppercase; font-weight: 600; letter-spacing: 0.05em; margin-bottom: 0.5rem;}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -151,8 +124,6 @@ DEFAULT_ASSETS = [
 ]
 
 CATEGORY_LABELS = {"tw_stock": "Taiwan Stocks", "us_stock": "US Stocks", "crypto": "Cryptocurrency", "cash": "Cash & Equivalents"}
-# ✨ Apple 系統重點色系
-CATEGORY_COLORS = {"tw_stock": "#0A84FF", "us_stock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}
 
 ACCOUNT_LABELS = {
     "Default": "國泰證券戶",
@@ -220,7 +191,6 @@ def fetch_realtime_market_data(assets_list):
     exchange_rate = 32.5
     
     try:
-        # 延長抓取天數為 1mo，徹底解決 yfinance 的時區截斷 bug
         fx_hist = yf.Ticker("USDTWD=X").history(period="1mo", interval="1d")
         if not fx_hist.empty:
             exchange_rate = float(fx_hist['Close'].dropna().iloc[-1])
@@ -233,21 +203,17 @@ def fetch_realtime_market_data(assets_list):
             
         try:
             ticker = yf.Ticker(sym)
-            
-            # 優先使用 fast_info 獲取最即時且不受 K 線假數據干擾的報價
             try:
                 fi = ticker.fast_info
-                # 確保數值存在
                 if fi.last_price is not None and fi.previous_close is not None:
                     quote_data[sym] = {
                         "price": float(fi.last_price), 
                         "prev_close": float(fi.previous_close)
                     }
-                    continue # 成功抓到就跳過歷史 K 線的運算
+                    continue
             except Exception:
                 pass
             
-            # 如果 fast_info 失敗，退回使用強化版的 K 線清洗演算法
             hist = ticker.history(period="1mo", interval="1d")
             hist = hist.dropna(subset=['Close'])
             if hist.empty: continue
@@ -260,7 +226,7 @@ def fetch_realtime_market_data(assets_list):
                 if 'Volume' in hist.columns:
                     valid_vols = hist['Volume'] > 0
                     if len(valid_vols) > 0:
-                        valid_vols.iloc[-1] = True 
+                        valid_vols.iloc[-1] = True
                         hist = hist[valid_vols]
                     
             price = float(hist['Close'].iloc[-1])
@@ -384,7 +350,7 @@ if "assets" not in st.session_state: st.session_state.assets = load_assets()
 
 # --- Sidebar Connection Status ---
 with st.sidebar:
-    st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=200&q=80", width=100)
+    st.image("https://images.unsplash.com/photo-1611974789855-9c2a0a7236a3?auto=format&fit=crop&w=300&q=80", width=150)
     st.markdown("### System Status")
     if get_db():
         st.success("🟢 Firebase Cloud Sync: Active")
@@ -393,7 +359,6 @@ with st.sidebar:
         st.warning("🟡 Local Storage Mode")
         st.caption("Cloud database not connected yet. Data will reset if Streamlit hibernates.")
 
-# ✨ 調整排版：先抓取與計算數據，讓頂部的「總資產」能第一時間獲取數值
 with st.spinner("Fetching active markets and calculating TWD values..."):
     exchange_rate, portfolio = fetch_realtime_market_data(st.session_state.assets)
 
@@ -411,21 +376,20 @@ cash_total = sum(a["totalValueTWD"] for a in portfolio if a["category"] == "cash
 
 # ----------------- Header & Global Actions -----------------
 
-# ✨ Apple Hero Section 排版：左邊大標題、右邊超大總資產
 header_left, header_right = st.columns([1.2, 1])
 
 with header_left:
-    st.markdown("<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
+    st.markdown(f"<h1 class='main-title'>Tony's <span class='highlight-title'>Asset Dashboard</span></h1>", unsafe_allow_html=True)
     st.write("Track and balance multi-asset portfolios in Real-time (TW Stocks, US Stocks, Cryptos, and Cash).")
 
 with header_right:
     ds = "+" if total_day_change >= 0 else ""
-    color = "#30D158" if total_day_change >= 0 else "#FF453A"
+    color = theme_green if total_day_change >= 0 else theme_red
     
     st.markdown(f"""
     <div style='text-align: right; padding-top: 0.5rem;'>
-        <div style='color: #8E8E93; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Total Net Worth</div>
-        <div style='color: #FFFFFF; font-size: 3.2rem; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: -0.02em; line-height: 1;'>{format_currency_twd(total_net_worth)}</div>
+        <div style='color: {theme_subtext}; font-size: 0.85rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 4px;'>Total Net Worth</div>
+        <div style='color: {theme_text}; font-size: 3.2rem; font-weight: 700; font-family: -apple-system, BlinkMacSystemFont, monospace; letter-spacing: -0.02em; line-height: 1;'>{format_currency_twd(total_net_worth)}</div>
         <div style='color: {color}; font-size: 1.1rem; font-weight: 600; font-family: -apple-system, BlinkMacSystemFont, monospace; margin-top: 8px;'>
             {ds}{format_currency_twd(total_day_change)} ({ds}{percent_change:.2f}%) Today
         </div>
@@ -433,7 +397,7 @@ with header_right:
     """, unsafe_allow_html=True)
 
 st.write("") # 增加一點呼吸空間
-action_c1, action_c2, action_c3 = st.columns([1.5, 1.5, 7])
+action_c1, action_c2, action_c3, action_c4 = st.columns([1.5, 1.5, 1.5, 5.5])
 
 with action_c1:
     if st.button("🔄 Refresh Rates", use_container_width=True):
@@ -444,7 +408,6 @@ with action_c1:
 with action_c2:
     with st.popover("➕ Add Asset", use_container_width=True):
         st.markdown("**Add New Asset (新增資產)**")
-        
         search_kw = st.text_input("🔍 1. Search (輸入代碼或關鍵字後按 Enter)", placeholder="e.g. 2330 或 AAPL")
         
         options_dict = {}
@@ -479,7 +442,6 @@ with action_c2:
                     st.error("請輸入或選擇股票代號 (Symbol)")
                 else:
                     clean_sym = new_sym.strip().upper()
-                    
                     fetched_name = clean_sym
                     if clean_sym in options_dict:
                         parts = options_dict[clean_sym].split(' | ')
@@ -505,32 +467,37 @@ with action_c2:
                     st.cache_data.clear()
                     st.rerun()
 
+# ✨ 主題切換按鈕
+with action_c3:
+    if st.button("🌞 亮色模式" if is_dark else "🌙 深色模式", use_container_width=True):
+        st.session_state.theme = "light" if is_dark else "dark"
+        st.rerun()
+
 st.markdown("---")
 
 # ----------------- Dashboard Layout -----------------
 
-# ✨ 卡片區縮減為完美平衡的 3 格
 m1, m2, m3 = st.columns([1, 1, 1])
 
 with m1:
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         us = "+" if total_unrealized_pnl >= 0 else ""
         st.metric("Total Unrealized P/L", f"{us}{format_currency_twd(total_unrealized_pnl)}", f"{us}{total_unrealized_percent:.2f}% (All-Time)", delta_color="normal")
 with m2: 
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         st.metric("Cash Liquidity", format_currency_twd(cash_total), f"{(cash_total/total_net_worth*100) if total_net_worth>0 else 0:.1f}% of portfolio", delta_color="off")
 with m3: 
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         st.metric("USDTWD Rate", f"NT$ {exchange_rate:.2f}", "Live Yahoo Query")
 
 col_left, col_right = st.columns([3, 2])
 
 with col_left:
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         st.subheader("📈 Performance History")
         chart_p1, chart_p2 = st.columns([2, 3])
         with chart_p1: selected_period = st.segmented_control("Timeframe", ["1w", "1mo", "3mo", "6mo", "1y"], format_func=lambda x: x.upper(), default="1mo", label_visibility="collapsed")
@@ -545,7 +512,7 @@ with col_left:
                 x=df_hist["date"], 
                 y=df_hist[selected_class], 
                 mode="lines", 
-                line=dict(color={"total": "#0A84FF", "twStock": "#0A84FF", "usStock": "#5E5CE6", "crypto": "#FF9F0A", "cash": "#30D158"}.get(selected_class, "#0A84FF"), width=3), 
+                line=dict(color={"total": CATEGORY_COLORS['tw_stock'], "twStock": CATEGORY_COLORS['tw_stock'], "usStock": CATEGORY_COLORS['us_stock'], "crypto": CATEGORY_COLORS['crypto'], "cash": CATEGORY_COLORS['cash']}.get(selected_class, CATEGORY_COLORS['tw_stock']), width=3), 
                 name=selected_class, 
                 hovertemplate="<b>Date</b>: %{x}<br><b>Value (TWD)</b>: NT$ %{y:,.0f}<extra></extra>"
             ))
@@ -555,8 +522,8 @@ with col_left:
                 height=280, 
                 paper_bgcolor="rgba(0,0,0,0)", 
                 plot_bgcolor="rgba(0,0,0,0)", 
-                xaxis=dict(showgrid=False, tickfont=dict(color="#8E8E93", size=10)), 
-                yaxis=dict(showgrid=True, gridcolor="#2C2C2E", tickfont=dict(color="#8E8E93", size=10), tickprefix="NT$ ")
+                xaxis=dict(showgrid=False, tickfont=dict(color=theme_subtext, size=10)), 
+                yaxis=dict(showgrid=True, gridcolor=theme_border, tickfont=dict(color=theme_subtext, size=10), tickprefix="NT$ ")
             )
             st.plotly_chart(fig_area, use_container_width=True, config={"displayModeBar": False})
         else:
@@ -564,9 +531,8 @@ with col_left:
 
 with col_right:
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         
-        # ✨ 新增：將標題與切換按鈕並列
         pie_title_col, pie_btn_col = st.columns([1.5, 1])
         with pie_title_col:
             st.subheader("🍩 Current Asset Allocation")
@@ -578,7 +544,6 @@ with col_right:
             if not df_alloc.empty:
                 fig_pie = px.pie(df_alloc, values="Value", names="Category", hole=0.55, color="Category", color_discrete_map={CATEGORY_LABELS[k]: CATEGORY_COLORS[k] for k in CATEGORY_LABELS.keys()})
         else:
-            # ✨ 計算單一標的合併後的總市值
             asset_totals = {}
             for a in portfolio:
                 sym = a["symbol"].split('.')[0] 
@@ -588,8 +553,7 @@ with col_right:
                 fig_pie = px.pie(df_alloc, values="Value", names="Asset", hole=0.55)
 
         if not df_alloc.empty:
-            # 保持 Apple 質感字體與對齊高度
-            fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color="#E2E9EF"), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
+            fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color=theme_text), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
             fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
         else:
@@ -600,7 +564,7 @@ st.markdown("---")
 st.subheader("🤖 AI Portfolio Advisor")
 
 with st.container(border=True):
-    st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
     
     if not GEMINI_IMPORTED or "GEMINI_API_KEY" not in st.secrets:
         st.warning("⚠️ AI 分析模組尚未啟用")
@@ -611,23 +575,18 @@ with st.container(border=True):
         3. 在 GitHub 的 `requirements.txt` 檔案中加入：`google-generativeai`
         """)
     else:
-        # 初始化 Gemini API
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
         
-        # 初始化對話紀錄
         if "chat_history" not in st.session_state:
             st.session_state.chat_history = []
             
-        # 顯示歷史對話
         for msg in st.session_state.chat_history:
             with st.chat_message(msg["role"]):
                 st.markdown(msg["content"])
                 
-        # 使用者輸入框
         user_msg = st.chat_input("詢問 AI 關於投資組合的建議，或點擊上方按鈕一鍵分析...")
-        
-        # 一鍵分析按鈕
         analyze_btn_clicked = False
+        
         col_btn, _ = st.columns([1, 2])
         with col_btn:
             if st.button("✨ 一鍵分析目前的資產配置", use_container_width=True):
@@ -635,13 +594,11 @@ with st.container(border=True):
                 user_msg = "請以專業財務顧問的角度，分析我目前的資產配置，並根據目前的總體經濟局勢給出建議。"
                 
         if user_msg:
-            # 顯示使用者的問題 (若是一鍵分析則隱藏這個制式問題，讓版面乾淨)
             if not analyze_btn_clicked:
                 with st.chat_message("user"):
                     st.markdown(user_msg)
             st.session_state.chat_history.append({"role": "user", "content": user_msg})
             
-            # 在背景將「投資組合現況」偷偷塞給 AI，讓它具備先備知識
             context = f"以下是我的投資組合現況 (總淨值: NT$ {total_net_worth:,.0f}):\n"
             for a in portfolio:
                 context += f"- {a['name']} ({a['category']}): 價值 NT$ {a['totalValueTWD']:,.0f} (佔比 {(a['totalValueTWD']/total_net_worth*100) if total_net_worth>0 else 0:.1f}%)\n"
@@ -651,16 +608,13 @@ with st.container(border=True):
             with st.chat_message("assistant"):
                 with st.spinner("AI 正在深度分析中..."):
                     try:
-                        # ✨ 終極修復：動態獲取模型，並加上「安全濾網」過濾掉沒有免費額度的實驗版
                         available_models = [m.name for m in genai.list_models() if 'generateContent' in m.supported_generation_methods]
-                        
-                        # 核心防護：剔除含有 'preview', 'experimental', 'computer' 等被限制額度的模型
+                        # ✨ 過濾掉 preview 與 experimental 等沒有免費額度的預覽版模型
                         safe_models = [m for m in available_models if 'preview' not in m and 'experimental' not in m and 'computer' not in m]
                         
                         if not safe_models:
-                            target_model = "models/gemini-1.5-flash" # 終極保底寫法
+                            target_model = "models/gemini-1.5-flash"
                         else:
-                            # 預設抓第一個安全的，但優先尋找最快、免費額度最高的 flash 模型
                             target_model = safe_models[0]
                             for m_name in safe_models:
                                 if 'gemini-1.5-flash' in m_name:
@@ -669,7 +623,6 @@ with st.container(border=True):
                                 elif 'flash' in m_name:
                                     target_model = m_name
                             
-                        # 使用過濾後的安全模型名稱
                         model = genai.GenerativeModel(target_model)
                         response = model.generate_content(full_prompt)
                         
@@ -689,7 +642,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
     if not raw_cat_assets: continue
     
     with st.container(border=True):
-        st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+        st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         
         ch_1, ch_2 = st.columns([3, 1])
         with ch_1: 
@@ -752,16 +705,15 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
         with ch_2: 
             abs_change = abs(cat_total_change)
             sign = "+" if cat_total_change >= 0 else "-"
-            # ✨ Apple 股市專用色：經典綠 (#30D158) 與 經典紅 (#FF453A)
-            color = "#30D158" if cat_total_change >= 0 else "#FF453A"
+            color = theme_green if cat_total_change >= 0 else theme_red
             
             if cat_key == "us_stock":
                 val_usd = cat_total_val / exchange_rate
                 abs_change_usd = abs(cat_total_change / exchange_rate)
                 st.markdown(f"""
                 <div style='text-align:right;'>
-                    <strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong>
-                    <span style='font-size:0.85rem; color:#8E8E93; margin-left:4px;'>(US$ {val_usd:,.2f})</span><br>
+                    <strong style='font-size:1.1rem; color:{theme_text};'>{format_currency_twd(cat_total_val)}</strong>
+                    <span style='font-size:0.85rem; color:{theme_subtext}; margin-left:4px;'>(US$ {val_usd:,.2f})</span><br>
                     <span style='font-size:0.8rem; font-family: -apple-system, BlinkMacSystemFont, monospace; color:{color}'>
                         日盈虧: {sign}{format_currency_twd(abs_change)} 
                         <span style='margin-left:2px;'>(US$ {abs_change_usd:,.2f})</span>
@@ -771,7 +723,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             else:
                 st.markdown(f"""
                 <div style='text-align:right;'>
-                    <strong style='font-size:1.1rem;'>{format_currency_twd(cat_total_val)}</strong><br>
+                    <strong style='font-size:1.1rem; color:{theme_text};'>{format_currency_twd(cat_total_val)}</strong><br>
                     <span style='font-size:0.8rem; font-family: -apple-system, BlinkMacSystemFont, monospace; color:{color}'>
                         日盈虧: {sign}{format_currency_twd(abs_change)}
                     </span>
@@ -796,8 +748,8 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             if cat_key == "cash": 
                 change_str, price_str, cost_str, return_str = "-", "-", "-", "-"
             else:
-                color_day = "#30D158" if is_pos else "#FF453A"
-                color_return = "#30D158" if is_return_pos else "#FF453A"
+                color_day = theme_green if is_pos else theme_red
+                color_return = theme_green if is_return_pos else theme_red
                 
                 change_str = f"<span style='color:{color_day}; font-family:-apple-system, BlinkMacSystemFont, monospace;'>{'+' if is_pos else ''}{a['dayChangePercent']:.2f}% ({'+' if is_pos else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})</span>"
                 return_str = f"<span style='color:{color_return}; font-family:-apple-system, BlinkMacSystemFont, monospace;'>{'+' if is_return_pos else ''}{a['unrealizedPnlPercent']:.2f}% ({'+' if is_return_pos else '-'}{format_currency_twd(abs(a['unrealizedPnlTWD']))})</span>"
@@ -806,14 +758,14 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
                 
             c1, c2, c3, c4, c5, c6, c7, c8 = st.columns(cols_ratio)
             
-            multi_tag = f" <span style='font-size:0.65rem; background:#2C2C2E; color:#FFFFFF; padding:2px 6px; border-radius:10px; margin-left:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
-            c1.markdown(f"<b>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:#8E8E93;font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
-            c2.markdown(f"{a['quantity']:,.5f}".rstrip('0').rstrip('.'))
-            c3.markdown(cost_str)
-            c4.markdown(price_str)
+            multi_tag = f" <span style='font-size:0.65rem; background:{theme_border}; color:{theme_text}; padding:2px 6px; border-radius:10px; margin-left:4px;'>{len(a['underlying'])} Accs</span>" if len(a['underlying']) > 1 else ""
+            c1.markdown(f"<b style='color:{theme_text};'>{a['symbol'].split('.')[0]}</b>{multi_tag}<br><span style='color:{theme_subtext};font-size:0.75rem;'>{a['name']}</span>", unsafe_allow_html=True)
+            c2.markdown(f"<span style='color:{theme_text};'>{a['quantity']:,.5f}</span>".rstrip('0').rstrip('.'), unsafe_allow_html=True)
+            c3.markdown(f"<span style='color:{theme_text};'>{cost_str}</span>", unsafe_allow_html=True)
+            c4.markdown(f"<span style='color:{theme_text};'>{price_str}</span>", unsafe_allow_html=True)
             c5.markdown(change_str, unsafe_allow_html=True)
             c6.markdown(return_str, unsafe_allow_html=True)
-            c7.markdown(f"<b>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
+            c7.markdown(f"<b style='color:{theme_text};'>{format_currency_twd(a['totalValueTWD'])}</b>", unsafe_allow_html=True)
             
             with c8:
                 with st.popover("⚙️"):
@@ -849,7 +801,7 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
 # ----------------- Footer -----------------
 st.markdown("---")
 st.markdown(
-    "<div style='text-align: center; color: #8E8E93; font-size: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, monospace;'>"
+    f"<div style='text-align: center; color: {theme_subtext}; font-size: 0.75rem; font-family: -apple-system, BlinkMacSystemFont, monospace;'>"
     f"Tony's Asset Dashboard • Live Sync via Yahoo Finance & Firebase • Last update: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     "</div>", 
     unsafe_allow_html=True
