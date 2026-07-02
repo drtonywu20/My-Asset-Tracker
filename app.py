@@ -16,7 +16,6 @@ try:
 except ImportError:
     FIREBASE_AVAILABLE = False
 
-# ✨ 嘗試匯入 Google Generative AI (Gemini)
 try:
     import google.generativeai as genai
     GEMINI_IMPORTED = True
@@ -602,15 +601,27 @@ st.markdown("---")
 st.subheader("🤖 AI Portfolio Advisor")
 
 with st.container(border=True):
-    st.markdown("<div class='card-marker'></div>", unsafe_allow_html=True)
+    st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
     
-    if not GEMINI_IMPORTED or "GEMINI_API_KEY" not in st.secrets:
-        st.warning("⚠️ AI 分析模組尚未啟用")
+    if not GEMINI_IMPORTED:
+        st.warning("⚠️ AI 分析模組尚未啟用：等待套件安裝中")
         st.info("""
-        **💡 3 步驟免費啟用 Google Gemini AI 顧問：**
-        1. 前往 [Google AI Studio](https://aistudio.google.com/app/apikey) 登入並獲取免費的 API Key。
-        2. 在 Streamlit 的 Secrets 設定中新增：`GEMINI_API_KEY = "你的金鑰"`
-        3. 在 GitHub 的 `requirements.txt` 檔案中加入：`google-generativeai`
+        **💡 系統尚未載入 AI 套件。因為您剛更新了 `requirements.txt`，Streamlit 伺服器需要重新啟動才能下載套件！**
+        
+        **👉 解決步驟 (強制重啟)：**
+        1. 點擊網頁右下角的 **「Manage app」**（管理應用程式）。
+        2. 點擊彈出選單右上角的 **「⋮」** (三個點)。
+        3. 選擇 **「Reboot app」**。
+        4. 等待大約 1~2 分鐘讓伺服器重新安裝套件，畫面重整後就會出現 AI 對話框了！
+        """)
+    elif "GEMINI_API_KEY" not in st.secrets:
+        st.warning("⚠️ AI 分析模組尚未啟用：找不到 API Key")
+        st.info("""
+        **💡 AI 套件已就緒，但在 Secrets 找不到金鑰。**
+        
+        **👉 解決步驟：**
+        請確認在 Streamlit 的 Secrets 設定中，寫法完全沒有多餘的空格，並且有加上引號：
+        `GEMINI_API_KEY = "你的金鑰"`
         """)
     else:
         # 初始化 Gemini API
