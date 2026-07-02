@@ -554,7 +554,9 @@ with col_right:
 
         if not df_alloc.empty:
             fig_pie.update_traces(textinfo="percent+label", textposition="outside", textfont=dict(size=13, color=theme_text), hovertemplate="<b>%{label}</b><br>Value: NT$ %{value:,.0f}<br>Percent: %{percent}<extra></extra>")
-            fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=30), height=320, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
+            
+            # ✨ 優化高度從 320 -> 380，底部 Margin 從 b=30 -> b=80，給予單一標的文字足夠的顯示空間
+            fig_pie.update_layout(margin=dict(l=40, r=40, t=30, b=80), height=380, paper_bgcolor="rgba(0,0,0,0)", showlegend=False)
             st.plotly_chart(fig_pie, use_container_width=True, config={"displayModeBar": False})
         else:
             st.info("No asset holdings.")
