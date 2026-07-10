@@ -51,6 +51,8 @@ seg_track  = "#3A3A3C" if is_dark else "#E5E5EA"
 seg_active = "#1C1C1E" if is_dark else "#FFFFFF"
 seg_text   = "#EBEBF5" if is_dark else "#1D1D1F"
 seg_sub    = "#8E8E93" if is_dark else "#6E6E73"
+chat_bg    = "#1C1C1E" if is_dark else "#FFFFFF"
+chat_text  = "#FFFFFF" if is_dark else "#1D1D1F"
 
 CATEGORY_COLORS = {
     "tw_stock": "#0A84FF" if is_dark else "#007AFF",
@@ -166,38 +168,34 @@ st.markdown(f"""
   }}
   [data-baseweb="input"] input, input[data-testid="stNumberInputField"] {{ color:{theme_text} !important; }}
 
-  /* ── 7. CHAT INPUT & MESSAGES ────────────────────────────────── */
-  [data-testid="stChatInput"] {{
-  [data-baseweb="input"] input, input[data-testid="stNumberInputField"] { color:{theme_text} !important; }
-
   /* ── 7. CHAT INPUT ──────────────────────────────────────────── */
-  [data-testid="stChatInput"] {
+  [data-testid="stChatInput"] {{
       background-color: transparent !important;
-  }
-  [data-testid="stChatInput"] > div {
+  }}
+  [data-testid="stChatInput"] > div {{
       background-color: {chat_bg} !important;
       border: 1px solid {theme_border} !important;
       border-radius: 14px !important;
-  }
-  [data-testid="stChatInput"] textarea { 
+  }}
+  [data-testid="stChatInput"] textarea {{ 
       color: {chat_text} !important; 
       -webkit-text-fill-color: {chat_text} !important;
       caret-color: {chat_text} !important;
       background-color: transparent !important;
-  }
-  [data-testid="stChatInputSubmitButton"] {
+  }}
+  [data-testid="stChatInputSubmitButton"] {{
       background-color: {CATEGORY_COLORS['tw_stock']} !important;
       color: #FFFFFF !important;
       border: none !important;
       border-radius: 10px !important;
-  }
+  }}
   /* Chat message bubbles */
-  [data-testid="stChatMessage"] {
+  [data-testid="stChatMessage"] {{
       background-color: {chat_bg} !important;
       border-radius: 12px !important;
       color: {chat_text} !important;
-  }
-  [data-testid="stChatMessage"] p { color: {chat_text} !important; }
+  }}
+  [data-testid="stChatMessage"] p {{ color: {chat_text} !important; }}
 
   /* ── 8. POPOVER ─────────────────────────────────────────────── */
   [data-testid="stPopoverBody"] {{
