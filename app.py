@@ -889,14 +889,14 @@ with st.container(border=True):
                             available = [m.name for m in genai.list_models()
                                          if "generateContent" in m.supported_generation_methods]
                             
-                            # 優先鎖定 1.5 系列的穩定版模型，避開權限不足的 2.5 版本
+                            # 優先鎖定 1.5 系列的穩定版模型，避開權限不足的 2.0 與 2.5 版本
                             preferred = ["models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
                             target = next((m for m in preferred if m in available), None)
                             
                             if not target:
-                                # 若都沒有，則啟動嚴格過濾機制，明確踢除帶有 '2.5' 的模型
+                                # 若都沒有，則啟動嚴格過濾機制，明確踢除帶有 '2.0', '2.5' 的模型
                                 safe = [m for m in available
-                                        if not any(x in m for x in ["preview","experimental","computer","2.5"])]
+                                        if not any(x in m for x in ["preview","experimental","computer","2.5","2.0"])]
                                 target = next((m for m in safe if "flash" in m),
                                               safe[0] if safe else "models/gemini-1.5-flash")
                                               
