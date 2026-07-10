@@ -888,11 +888,18 @@ with st.container(border=True):
                         try:
                             available = [m.name for m in genai.list_models()
                                          if "generateContent" in m.supported_generation_methods]
-                            safe = [m for m in available
-                                    if not any(x in m for x in ["preview","experimental","computer"])]
-                            target = next((m for m in safe if "gemini-1.5-flash" in m),
-                                          next((m for m in safe if "flash" in m),
-                                               safe[0] if safe else "models/gemini-1.5-flash"))
+                            
+                            # 優先鎖定 1.5 系列的穩定版模型，避開權限不足的 2.5 版本
+                            preferred = ["models/gemini-1.5-flash", "models/gemini-1.5-flash-latest", "models/gemini-1.5-pro"]
+                            target = next((m for m in preferred if m in available), None)
+                            
+                            if not target:
+                                # 若都沒有，則啟動嚴格過濾機制，明確踢除帶有 '2.5' 的模型
+                                safe = [m for m in available
+                                        if not any(x in m for x in ["preview","experimental","computer","2.5"])]
+                                target = next((m for m in safe if "flash" in m),
+                                              safe[0] if safe else "models/gemini-1.5-flash")
+                                              
                             model    = genai.GenerativeModel(target)
                             response = model.generate_content(full_prompt)
                             st.markdown(response.text)
