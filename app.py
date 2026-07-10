@@ -196,6 +196,13 @@ st.markdown(f"""
       color: {chat_text} !important;
   }}
   [data-testid="stChatMessage"] p {{ color: {chat_text} !important; }}
+  
+  /* 徹底覆蓋 AI 訊息框內的任何可能自帶顏色的排版元素 */
+  [data-testid="stChatMessage"] h1, [data-testid="stChatMessage"] h2, [data-testid="stChatMessage"] h3, 
+  [data-testid="stChatMessage"] h4, [data-testid="stChatMessage"] li, [data-testid="stChatMessage"] th, 
+  [data-testid="stChatMessage"] td, [data-testid="stChatMessage"] strong, [data-testid="stChatMessage"] em {{
+      color: {chat_text} !important;
+  }}
 
   /* ── 8. POPOVER ─────────────────────────────────────────────── */
   [data-testid="stPopoverBody"] {{
