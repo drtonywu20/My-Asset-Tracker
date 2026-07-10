@@ -510,7 +510,7 @@ with hdr_r:
     # Privacy toggle button uses a Streamlit button that toggles state
     eye_label = "🙈 Hide Numbers" if nums_on else "👁 Show Numbers"
     nw_display  = format_currency_twd(total_net_worth)  if nums_on else "••••••••"
-    day_display = f"{ds}{format_currency_twd(total_day_change)} ({ds}{percent_change:.2f}%) Today" if nums_on else "••••••••"
+    day_display = f"{ds}{format_currency_twd(total_day_change)} ({ds}{percent_change:.2f}%) Today" if nums_on else f"•••••••• ({ds}{percent_change:.2f}%) Today"
 
     st.markdown(f"""
     <div style='text-align:right;padding-top:0.5rem;'>
@@ -602,13 +602,13 @@ with m1:
         st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         us_sign = "+" if total_unrealized_pnl >= 0 else ""
         pnl_val = f"{us_sign}{format_currency_twd(total_unrealized_pnl)}" if nums_on else "••••••••"
-        pnl_delta = f"{us_sign}{total_unrealized_pct:.2f}% (All-Time)" if nums_on else "••••"
+        pnl_delta = f"{us_sign}{total_unrealized_pct:.2f}% (All-Time)"
         st.metric("Total Unrealized P/L", pnl_val, pnl_delta, delta_color="normal")
 with m2:
     with st.container(border=True):
         st.markdown("<div class='section-card'></div>", unsafe_allow_html=True)
         cash_val = format_currency_twd(cash_total) if nums_on else "••••••••"
-        cash_pct = f"{(cash_total/total_net_worth*100) if total_net_worth else 0:.1f}% of portfolio" if nums_on else "••••"
+        cash_pct = f"{(cash_total/total_net_worth*100) if total_net_worth else 0:.1f}% of portfolio"
         st.metric("Cash Liquidity", cash_val, cash_pct, delta_color="off")
 with m3:
     with st.container(border=True):
@@ -771,10 +771,15 @@ for cat_key in ["tw_stock", "us_stock", "crypto", "cash"]:
             else:
                 cd = theme_green if ip else theme_red
                 cr = theme_green if ir else theme_red
-                chg_raw = f"{'+' if ip else ''}{a['dayChangePercent']:.2f}% ({'+' if ip else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})"
-                ret_raw = f"{'+' if ir else ''}{a['unrealizedPnlPercent']:.2f}% ({'+' if ir else '-'}{format_currency_twd(abs(a['unrealizedPnlTWD']))})"
-                chg_s = f"<span style='color:{cd};font-family:-apple-system,monospace;'>{'••••' if not nums_on else chg_raw}</span>"
-                ret_s = f"<span style='color:{cr};font-family:-apple-system,monospace;'>{'••••' if not nums_on else ret_raw}</span>"
+                
+                chg_pct_str = f"{'+' if ip else ''}{a['dayChangePercent']:.2f}%"
+                chg_amt_str = f"({'+' if ip else '-'}{format_currency_twd(abs(a['dayChangeTWD']))})" if nums_on else "(••••)"
+                chg_s = f"<span style='color:{cd};font-family:-apple-system,monospace;'>{chg_pct_str} {chg_amt_str}</span>"
+                
+                ret_pct_str = f"{'+' if ir else ''}{a['unrealizedPnlPercent']:.2f}%"
+                ret_amt_str = f"({'+' if ir else '-'}{format_currency_twd(abs(a['unrealizedPnlTWD']))})" if nums_on else "(••••)"
+                ret_s = f"<span style='color:{cr};font-family:-apple-system,monospace;'>{ret_pct_str} {ret_amt_str}</span>"
+                
                 pr_s  = format_currency_foreign(a["currentPrice"],  a["currency"])
                 co_s  = format_currency_foreign(a["average_cost"],  a["currency"])
 
@@ -847,11 +852,15 @@ with st.container(border=True):
         with col_btn:
             analyze_clicked = st.button("✨ 一鍵深度分析資產配置", use_container_width=True, key="ai_analyze_btn")
 
+        if analyze_clicked:
+            st.session_state.trigger_ai_analysis = True
+
         # ── 輸入框 ──
         user_msg = st.chat_input("詢問 AI 量化投資建議，或點上方按鈕一鍵分析 …")
 
-        if analyze_clicked:
+        if st.session_state.get("trigger_ai_analysis"):
             user_msg = "請執行完整的四步驟深度分析。"
+            st.session_state.trigger_ai_analysis = False
 
         if user_msg:
             # 組裝完整 prompt
@@ -881,7 +890,7 @@ with st.container(border=True):
                         target = next((m for m in safe if "gemini-1.5-flash" in m),
                                       next((m for m in safe if "flash" in m),
                                            safe[0] if safe else "models/gemini-1.5-flash"))
-                        model    = genai.GenerativeModel(target, system_instruction=AI_SYSTEM_PROMPT)
+                        model    = genai.GenerativeModel(target)
                         response = model.generate_content(full_prompt)
                         st.markdown(response.text)
                         st.session_state.chat_history.append({"role": "assistant", "content": response.text})
