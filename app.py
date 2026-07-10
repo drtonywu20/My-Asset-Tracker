@@ -51,8 +51,6 @@ seg_track  = "#3A3A3C" if is_dark else "#E5E5EA"
 seg_active = "#1C1C1E" if is_dark else "#FFFFFF"
 seg_text   = "#EBEBF5" if is_dark else "#1D1D1F"
 seg_sub    = "#8E8E93" if is_dark else "#6E6E73"
-chat_bg    = "#2C2C2E" if is_dark else "#F2F2F7"
-chat_text  = "#FFFFFF" if is_dark else "#1D1D1F"
 
 CATEGORY_COLORS = {
     "tw_stock": "#0A84FF" if is_dark else "#007AFF",
@@ -100,7 +98,6 @@ st.markdown(f"""
   div[data-testid="stVerticalBlock"]:has(> div.element-container .section-card) > div {{ background-color:transparent !important; }}
 
   /* ── 4. BUTTONS ─────────────────────────────────────────────── */
-  /* Force ALL Streamlit buttons to theme colours first */
   button {{
       background-color: {theme_card} !important;
       color: {theme_text} !important;
@@ -113,7 +110,6 @@ st.markdown(f"""
       color: {CATEGORY_COLORS['tw_stock']} !important;
       background-color: {theme_card} !important;
   }}
-  /* Primary / delete buttons */
   button[kind="primary"], button[data-testid="stBaseButton-primary"] {{
       background-color: {theme_red} !important;
       color: #FFFFFF !important;
@@ -124,7 +120,6 @@ st.markdown(f"""
       color: #FFFFFF !important;
       border: none !important;
   }}
-  /* Form submit */
   button[kind="secondaryFormSubmit"], button[data-testid="stBaseButton-secondaryFormSubmit"] {{
       background-color: {CATEGORY_COLORS['tw_stock']} !important;
       color: #FFFFFF !important;
@@ -171,26 +166,38 @@ st.markdown(f"""
   }}
   [data-baseweb="input"] input, input[data-testid="stNumberInputField"] {{ color:{theme_text} !important; }}
 
-  /* ── 7. CHAT INPUT ──────────────────────────────────────────── */
+  /* ── 7. CHAT INPUT & MESSAGES ────────────────────────────────── */
   [data-testid="stChatInput"] {{
+  [data-baseweb="input"] input, input[data-testid="stNumberInputField"] { color:{theme_text} !important; }
+
+  /* ── 7. CHAT INPUT ──────────────────────────────────────────── */
+  [data-testid="stChatInput"] {
+      background-color: transparent !important;
+  }
+  [data-testid="stChatInput"] > div {
       background-color: {chat_bg} !important;
       border: 1px solid {theme_border} !important;
       border-radius: 14px !important;
-  }}
-  [data-testid="stChatInput"] textarea {{ color:{chat_text} !important; background-color:transparent !important; }}
-  [data-testid="stChatInputSubmitButton"] {{
+  }
+  [data-testid="stChatInput"] textarea { 
+      color: {chat_text} !important; 
+      -webkit-text-fill-color: {chat_text} !important;
+      caret-color: {chat_text} !important;
+      background-color: transparent !important;
+  }
+  [data-testid="stChatInputSubmitButton"] {
       background-color: {CATEGORY_COLORS['tw_stock']} !important;
       color: #FFFFFF !important;
       border: none !important;
       border-radius: 10px !important;
-  }}
+  }
   /* Chat message bubbles */
-  [data-testid="stChatMessage"] {{
+  [data-testid="stChatMessage"] {
       background-color: {chat_bg} !important;
       border-radius: 12px !important;
       color: {chat_text} !important;
-  }}
-  [data-testid="stChatMessage"] p {{ color: {chat_text} !important; }}
+  }
+  [data-testid="stChatMessage"] p { color: {chat_text} !important; }
 
   /* ── 8. POPOVER ─────────────────────────────────────────────── */
   [data-testid="stPopoverBody"] {{
@@ -346,12 +353,6 @@ def format_currency_foreign(val, c):
     if c == "USD": return f"${val:,.2f}"
     return f"{c} {val:,.4f}"
 
-def private(text, always_blur=False):
-    """Return text blurred if privacy mode is on."""
-    if not nums_on or always_blur:
-        return f"<span class='blurred'>{text}</span>"
-    return text
-
 # ── MARKET DATA ────────────────────────────────────────────────
 @st.cache_data(ttl=300)
 def fetch_realtime_market_data(assets_list):
@@ -506,9 +507,6 @@ with hdr_l:
 with hdr_r:
     ds    = "+" if total_day_change >= 0 else ""
     color = theme_green if total_day_change >= 0 else theme_red
-    eye   = "👁" if nums_on else "👁‍🗨"
-    # Privacy toggle button uses a Streamlit button that toggles state
-    eye_label = "🙈 Hide Numbers" if nums_on else "👁 Show Numbers"
     nw_display  = format_currency_twd(total_net_worth)  if nums_on else "••••••••"
     day_display = f"{ds}{format_currency_twd(total_day_change)} ({ds}{percent_change:.2f}%) Today" if nums_on else f"•••••••• ({ds}{percent_change:.2f}%) Today"
 
@@ -842,10 +840,14 @@ with st.container(border=True):
     else:
         genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
 
+        # ── 建立對話紀錄專屬容器，解決卡頓問題 ──
+        chat_container = st.container()
+
         # ── 對話紀錄顯示在輸入框上方 ──
-        for msg in st.session_state.chat_history:
-            with st.chat_message(msg["role"]):
-                st.markdown(msg["content"])
+        with chat_container:
+            for msg in st.session_state.chat_history:
+                with st.chat_message(msg["role"]):
+                    st.markdown(msg["content"])
 
         # ── 一鍵分析按鈕 ──
         col_btn, _ = st.columns([1, 2])
@@ -877,27 +879,28 @@ with st.container(border=True):
             full_prompt = f"{AI_SYSTEM_PROMPT}\n\n---\n\n{portfolio_data}\n\n使用者指令: {user_msg}"
 
             st.session_state.chat_history.append({"role": "user", "content": user_msg})
-            with st.chat_message("user"):
-                st.markdown(user_msg)
+            
+            # 直接將新的訊息渲染進專屬容器，不再呼叫 rerurn，徹底解決畫面凍結！
+            with chat_container:
+                with st.chat_message("user"):
+                    st.markdown(user_msg)
 
-            with st.chat_message("assistant"):
-                with st.spinner("量化分析引擎運行中 …"):
-                    try:
-                        available = [m.name for m in genai.list_models()
-                                     if "generateContent" in m.supported_generation_methods]
-                        safe = [m for m in available
-                                if not any(x in m for x in ["preview","experimental","computer"])]
-                        target = next((m for m in safe if "gemini-1.5-flash" in m),
-                                      next((m for m in safe if "flash" in m),
-                                           safe[0] if safe else "models/gemini-1.5-flash"))
-                        model    = genai.GenerativeModel(target)
-                        response = model.generate_content(full_prompt)
-                        st.markdown(response.text)
-                        st.session_state.chat_history.append({"role": "assistant", "content": response.text})
-                    except Exception as e:
-                        st.error(f"AI 回應發生錯誤：{e}")
-
-            st.rerun()
+                with st.chat_message("assistant"):
+                    with st.spinner("量化分析引擎運行中 …"):
+                        try:
+                            available = [m.name for m in genai.list_models()
+                                         if "generateContent" in m.supported_generation_methods]
+                            safe = [m for m in available
+                                    if not any(x in m for x in ["preview","experimental","computer"])]
+                            target = next((m for m in safe if "gemini-1.5-flash" in m),
+                                          next((m for m in safe if "flash" in m),
+                                               safe[0] if safe else "models/gemini-1.5-flash"))
+                            model    = genai.GenerativeModel(target)
+                            response = model.generate_content(full_prompt)
+                            st.markdown(response.text)
+                            st.session_state.chat_history.append({"role": "assistant", "content": response.text})
+                        except Exception as e:
+                            st.error(f"AI 回應發生錯誤：{e}")
 
 # ── FOOTER ─────────────────────────────────────────────────────
 st.markdown("---")
